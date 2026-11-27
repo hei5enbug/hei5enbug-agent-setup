@@ -39,9 +39,16 @@ from refresh_install import (  # noqa: E402
     check_hooks, codex_home, codex_trust_reset, hook_file_entries, hooks_digest, inside, install_gate, installed,
     read_hook_file, read_manifest, rollout_idle, run_install, scan_hook_events, validate_claude_mod, validate_install,
 )
+import refresh_codex_job as codex_job  # noqa: E402
+from refresh_answers import checked_codex_answers, decided_entry, parse_answers  # noqa: E402
+from refresh_handoff import add_questions, alive, follow_item, hand_to_helper, handled, handoff_point, public  # noqa: E402
+from refresh_trust import CODEX_TRUST_TIMEOUT_SECONDS, settle_companion_trust, trust_codex_hooks  # noqa: E402
+from refresh_codex_session import gate_sessions  # noqa: E402
 from refresh_orca import Orca  # noqa: E402
 from refresh_orphans import run_close, run_orphans  # noqa: E402
+from refresh_interrupt import interrupt_apply, send_continue  # noqa: E402
 from refresh_manual import ACTIONS as MANUAL_ACTIONS, RESULTS as MANUAL_RESULTS, run_record_manual  # noqa: E402
+from refresh_questions import CHOICES, CODEX_INSTALL, codex_question_record, question_record, question_view  # noqa: E402
 from refresh_process import ProcessOs  # noqa: E402
 from refresh_resume import resume_outdated, run_resume  # noqa: E402
 from refresh_plugins import (  # noqa: E402
@@ -67,7 +74,6 @@ SELF_WAIT_SECONDS = 60 * 60
 NOTIFY_SECONDS = 120
 DEFAULT_APPLY_SECONDS = 20
 FOLLOW_UP_SECONDS = 60 * 60
-CODEX_TRUST_TIMEOUT_SECONDS = 60
 
 
 def recovery_command(root: str | None, companions: Sequence[str] = ()) -> str:
@@ -172,77 +178,6 @@ def update_host(host: str, context: dict | None = None) -> dict:
     return result
 
 
-def trust_codex_hooks() -> str | None:
-    """Re-trust this plugin's Codex hooks that the install left untrusted, from a verified official copy only; None when
-    none are left untrusted, otherwise why they were not trusted."""
-    command, cwd = [core.executable("codex"), "app-server"], str(Path.home())
-    try:
-        result = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd, [("hooks/list", {"cwds": [cwd]})],
-                                                   CODEX_TRUST_TIMEOUT_SECONDS)[0]
-        listed = CODEX_HOOK_TRUST.listed_hooks(result, cwd)
-        if CODEX_HOOK_TRUST.candidates(listed):
-            CODEX_HOOK_TRUST.heal(listed, command, dict(os.environ), cwd, CODEX_TRUST_TIMEOUT_SECONDS)
-    except (CODEX_HOOK_TRUST.TrustError, RefreshError) as error:
-        return str(error)
-    return None
-
-
-def settle_companion_trust(plugins: list[dict], context: dict) -> list[dict]:
-    """Narrow each companion's provisional trust warning to the hooks Codex still lists as untrusted or modified.
-
-    One listing, taken after the last companion install, serves every companion that may have lost trust. Nothing is
-    trusted unless the installed files and hook command match a pinned remote release."""
-    pending = set(context.get("trust_reset", ()))
-    if not pending:
-        return plugins
-    try:
-        command, cwd = [core.executable("codex"), "app-server"], str(Path.home())
-        result = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd, [("hooks/list", {"cwds": [cwd]})],
-                                                  CODEX_TRUST_TIMEOUT_SECONDS)[0]
-        hooks = CODEX_HOOK_TRUST.listed_hooks(result, cwd)
-        counts, unread, failures = {}, None, {}
-        for plugin in plugins:
-            plugin_id = plugin["plugin"]
-            targets = [hook for hook in hooks if isinstance(hook, dict) and hook.get("pluginId") == plugin_id
-                       and hook.get("trustStatus") in CODEX_HOOK_TRUST.UNTRUSTED]
-            counts[plugin_id] = len(targets)
-            pin = context.get("release_pins", {}).get(plugin_id.partition("@")[2])
-            if plugin_id not in pending or not targets or not pin or not plugin.get("root"):
-                continue
-            try:
-                root = Path(plugin["root"])
-                for hook in targets:
-                    verify_hook(hook, plugin_id, root)
-                verify_files(root, plugin_id.partition("@")[0], pin)
-                calls = [("config/value/write", {"keyPath": f'hooks.state."{hook["key"]}".trusted_hash',
-                                                 "value": hook["currentHash"], "mergeStrategy": "replace"}) for hook in targets]
-                checked = CODEX_HOOK_TRUST.app_server_calls(command, dict(os.environ), cwd,
-                            [*calls, ("hooks/list", {"cwds": [cwd]})], CODEX_TRUST_TIMEOUT_SECONDS)
-                after = CODEX_HOOK_TRUST.listed_hooks(checked[-1], cwd)
-                trusted = {hook.get("key") for hook in after if isinstance(hook, dict) and hook.get("trustStatus") == "trusted"}
-                if not {hook["key"] for hook in targets} <= trusted:
-                    raise CODEX_HOOK_TRUST.TrustError("Codex did not confirm every hook as trusted")
-                counts[plugin_id] = 0
-                plugin["codex_hooks_trusted"] = True
-            except (CODEX_HOOK_TRUST.TrustError, RefreshError, OSError, ValueError) as error:
-                failures[plugin_id] = str(error)
-    except (CODEX_HOOK_TRUST.TrustError, RefreshError, OSError):
-        counts, unread, failures = {}, "Codex hook trust state could not be read", {}
-    settled = []
-    for plugin in plugins:
-        if plugin["plugin"] not in pending:
-            settled.append(plugin)
-            continue
-        count = counts.get(plugin["plugin"], 0)
-        kept = [warning for warning in plugin["warnings"] if warning["code"] != HOOKS_TRUST_WARNING["code"]]
-        if unread:
-            kept.append({**HOOKS_TRUST_WARNING, "detail": unread})
-        elif count:
-            kept.append({**HOOKS_TRUST_WARNING, "detail": failures.get(plugin["plugin"]) or f"Codex lists {count} hook{'s' if count != 1 else ''} as untrusted or modified"})
-        settled.append({**plugin, "warnings": kept})
-    return settled
-
-
 def host_failure(error: RefreshError) -> dict:
     entry = {"error": {"code": error.code, "message": error.message}}
     for key in ("root", "recovery_command"):
@@ -251,10 +186,60 @@ def host_failure(error: RefreshError) -> dict:
     return entry
 
 
-def refresh_report(run_id: str, hosts: dict[str, dict], extra: dict) -> dict:
-    save_json(run_path(run_id), {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}})
+def refresh_report(run_id: str, hosts: dict[str, dict], extra: dict, questions: Sequence[dict] = (), codex_ids: Sequence[str] = ()) -> dict:
+    saved = {"run_id": run_id, "created_at": now(), "hosts": hosts, "sessions": {}}
+    if questions:
+        saved.update(questions={item["id"]: item for item in questions}, question_seq=len(questions),
+                     codex_install={"status": "asked", "ids": list(codex_ids)})
+    save_json(run_path(run_id), saved)
     failed = any("error" in value or any(item["status"] == "error" for item in value["plugins"]) for value in hosts.values())
-    return {"ok": not failed, "run_id": run_id, "script": continuation_script(hosts), "hosts": hosts, **extra}
+    asked = {"questions": [question_view(item) for item in questions]} if questions else {}
+    return {"ok": not failed, "run_id": run_id, "script": continuation_script(hosts), "hosts": hosts, **extra, **asked}
+
+
+def update_host_entry(host: str, ids: Sequence[str], ignore_env: bool = False) -> tuple[dict, RefreshError | None]:
+    """One host's update with its companions as a result entry, and the install gate that held an install back, if any.
+
+    `ignore_env` skips the check of the caller's own Codex turn, for the detached helper that runs the install later."""
+    context: dict = {"ids": ids, **({"ignore_env": True} if ignore_env else {})}
+
+    def gate() -> RefreshError | None:
+        return installs.install_gate(host, ignore_env=True) if ignore_env else installs.install_gate(host)
+
+    try:
+        if host == "codex":
+            held = gate()
+            prepare_marketplaces([PLUGIN_ID, *ids], context, advance=held is None)
+            held = held or gate()
+            blocked = held if context["release_pins"] or context["release_errors"] else None
+            if blocked:
+                root = cached_root(PLUGIN_ID)
+                blocked.details.update(root=root, recovery_command=recovery_command(root, ids))
+                entry = host_failure(blocked)
+                entry["plugins"] = [{"plugin": plugin_id, "status": "deferred", "code": blocked.code,
+                                     "message": blocked.message, "before_version": None, "after_version": None,
+                                     "warnings": []} for plugin_id in ids]
+                return entry, blocked
+        entry = update_host(host, context)
+    except RefreshError as error:
+        entry = host_failure(error)
+    except (OSError, ValueError):
+        entry = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
+    if host == "codex" and "release_pins" not in context:
+        entry["plugins"] = [{"plugin": plugin_id, "status": "error", "code": "codex_config_unreadable",
+                             "message": "Release refs could not be prepared; no Codex command ran.",
+                             "before_version": None, "after_version": None, "warnings": []} for plugin_id in ids]
+        return entry, context.get("blocked")
+    plugins = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
+    entry["plugins"] = settle_companion_trust(plugins, context)
+    return entry, context.get("blocked")
+
+
+def codex_questions(gate: RefreshError | None) -> list[dict]:
+    """One `codex_install` question for each busy Codex session an install gate names; ids continue from q1."""
+    if gate is None or gate.code not in {"codex_turn_in_progress", "update_deferred_active_session"}:
+        return []
+    return [codex_question_record(f"q{number}", session) for number, session in enumerate(gate_sessions(gate), 1)]
 
 
 def command_update(also: Sequence[str] = ()) -> dict:
@@ -262,35 +247,11 @@ def command_update(also: Sequence[str] = ()) -> dict:
     run_id = uuid.uuid4().hex
     claude_step = run_claude_update()
     hosts: dict[str, dict] = {}
+    gate = None
     for host in HOSTS:
-        context: dict = {"ids": ids}
-        try:
-            if host == "codex":
-                gate = installs.install_gate(host)
-                prepare_marketplaces([PLUGIN_ID, *ids], context, advance=gate is None)
-                gate = gate or installs.install_gate(host)
-                blocked = gate if context["release_pins"] or context["release_errors"] else None
-                if blocked:
-                    root = cached_root(PLUGIN_ID)
-                    blocked.details.update(root=root, recovery_command=recovery_command(root, ids))
-                    hosts[host] = host_failure(blocked)
-                    hosts[host]["plugins"] = [{"plugin": plugin_id, "status": "deferred", "code": blocked.code,
-                                              "message": blocked.message, "before_version": None, "after_version": None,
-                                              "warnings": []} for plugin_id in ids]
-                    continue
-            hosts[host] = update_host(host, context)
-        except RefreshError as error:
-            hosts[host] = host_failure(error)
-        except (OSError, ValueError):
-            hosts[host] = host_failure(RefreshError("plugin_check_failed", f"A {host} plugin file could not be checked."))
-        if host == "codex" and "release_pins" not in context:
-            hosts[host]["plugins"] = [{"plugin": plugin_id, "status": "error", "code": "codex_config_unreadable",
-                                      "message": "Release refs could not be prepared; no Codex command ran.",
-                                      "before_version": None, "after_version": None, "warnings": []} for plugin_id in ids]
-            continue
-        plugins = [refresh_companion(host, plugin_id, True, context) for plugin_id in ids]
-        hosts[host]["plugins"] = settle_companion_trust(plugins, context)
-    return refresh_report(run_id, attach_claude_update(hosts, claude_step), extra)
+        hosts[host], held = update_host_entry(host, ids)
+        gate = held if host == "codex" else gate
+    return refresh_report(run_id, attach_claude_update(hosts, claude_step), extra, codex_questions(gate), ids)
 
 
 def command_apply_installed(also: Sequence[str] = ()) -> dict:
@@ -333,17 +294,6 @@ def continuation_script(hosts: dict[str, dict]) -> str:
     return str(here)
 
 
-def public(entry: dict) -> dict:
-    keys = ("host", "title", "worktree", "status", "detail", "completed", "actions", "planned", "compact_reason", "note", "initiator",
-            "ready_signal", "input", "release", "host_release_outdated", "plugin_load", "orphaned", "resume_check",
-            "exit_late", "exit_state", "terminal_handle", "resume_line", "probe_position")
-    view = {key: entry.get(key) for key in keys if entry.get(key) not in (None, [], False)}
-    if entry.get("detail") in {"plugin_load_error", "codex_plugin_folder_replaced"} or entry.get("host_release_outdated"):
-        view["resume_approval_needed"] = True
-    view["terminal"] = f"…{entry['handle'][-6:]}"
-    return view
-
-
 def spawn_self_apply(run_id: str) -> int:
     process = subprocess.Popen(
         [sys.executable, str(Path(__file__).resolve()), "self-apply", "--run-id", run_id],
@@ -357,102 +307,47 @@ def spawn_self_apply(run_id: str) -> int:
     return process.pid
 
 
-def alive(pid: object) -> bool:
-    if not isinstance(pid, int) or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 def command_plan(run_id: str, mode: str, only: Sequence[str]) -> dict:
     state = load_run(run_id)
     sessions = plan_sessions(Orca(), state, mode, only)
     return {"ok": True, "run_id": run_id, "sessions": [public(entry) for entry in sessions]}
 
 
-def handled(state: dict, handle: str) -> str | None:
-    """The status a session already reached in this run, ignoring a queue whose helper never ran or died."""
-    status = state.get("sessions", {}).get(handle, {}).get("status")
-    if status == "done":
-        return status
-    if status == "queued_after_turn":
-        own = state.get("self") or {}
-        if own.get("handle") == handle and (alive(own.get("helper_pid")) or state.get("self_finished_at")):
-            return status
-    if status == "deferred":
-        helper = state.get("helper") or {}
-        if any(item.get("handle") == handle for item in state.get("follow_up", [])) and (alive(helper.get("pid")) or state.get("helper_finished_at")):
-            return status
-    return None
+def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict], spawn: Callable[[str], int]) -> list[dict]:
+    """Record this apply and hand its deferred sessions to the live helper or a new one, on the run state read afresh under its lock.
 
-
-def handoff_point(handle: str) -> dict:
-    """The transcript and its size at the handoff, both None when there is no transcript yet to measure from."""
-    path = (read_marker(handle) or {}).get("transcript_path")
-    if isinstance(path, str) and Path(path).is_file():
-        return {"handoff_transcript": path, "handoff_offset": transcript_size(path)}
-    return {"handoff_transcript": None, "handoff_offset": None}
-
-
-def commit_apply(run_id: str, mode: str, sessions: list[dict], others: list[dict], spawn: Callable[[str], int]) -> None:
-    """Record this apply and hand its deferred sessions to the live helper or a new one, on the run state read afresh under its lock."""
+    Returns the questions this apply saved for sessions that wait for the user's answer."""
     own = next((entry for entry in sessions if entry["initiator"] and entry["status"] == "pending"), None)
     deferred = [entry for entry in others if entry["status"] == "deferred"]
     initiator = next((entry for entry in sessions if entry["initiator"]), None)
     handed = time.time()
+    created: list[dict] = []
 
     def change(state: dict) -> dict:
-        helper = state.get("helper") or {}
-        helper_waiting = alive(helper.get("pid")) and not state.get("helper_finished_at")
         state["initiator"] = ({key: initiator.get(key) for key in ("handle", "host", "screen_identified")}
                               if initiator else None)
         state["compact_mode"] = mode
         if own or deferred:
-            items = [
-                {key: entry.get(key) for key in ("handle", "host", "actions", "planned", "title", "worktree", "compact_reason", "detail", "probe_retries",
-                                                 "screen_identified", "input", "ready_signal", "release", "host_release_outdated", "orphaned")}
-                | {key: entry[key] for key in ("completed", "note", "compact_after_resume") if entry.get(key)}
-                | {"compact_mode": mode, "deferred_at": handed, **handoff_point(entry["handle"])}
-                for entry in deferred
-            ]
-            handed_off = True
-            if helper_waiting:
-                pid = helper["pid"]
-                state["follow_up"] = [*state.get("follow_up", []), *items]
-                if items:
-                    state.pop("others_finished_at", None)
-            else:
-                try:
-                    pid = spawn(run_id)
-                except OSError:
-                    handed_off = False
-                    if own:
-                        own.update(status="failed", detail="helper_start_failed", actions=[])
-                    for entry in deferred:
-                        entry.update(status="skipped", detail="helper_start_failed", actions=[])
-                else:
-                    state["helper"] = {"pid": pid, "started_at": now()}
-                    state.pop("helper_finished_at", None)
-                    state.pop("others_finished_at", None)
-                    state["follow_up"] = items
-                    if not own:
-                        state.pop("self", None)
+            items = [follow_item(entry, mode, handed) for entry in deferred]
+            handed_off, pid = hand_to_helper(state, run_id, items, spawn, own is not None)
+            if not handed_off:
+                if own:
+                    own.update(status="failed", detail="helper_start_failed", actions=[])
+                for entry in deferred:
+                    entry.update(status="skipped", detail="helper_start_failed", actions=[])
             if handed_off and own:
                 own.update(status="queued_after_turn", detail="waits_for_this_turn_to_end")
                 state["self"] = {key: own.get(key) for key in ("handle", "host", "actions", "title", "worktree", "screen_identified")}
                 state["self"].update(compact_reason=own.get("compact_reason"), compact_mode=mode, helper_pid=pid, helper_started_at=now(), deferred_at=handed,
                                    **handoff_point(own["handle"]))
                 state.pop("self_finished_at", None)
+        created[:] = add_questions(state, sessions)
         state["sessions"] = {**state.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions if not entry.get("handled")}}
         state["applied_at"] = now()
         return state
 
     update_run(run_id, change)
+    return created
 
 
 def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spawn: Callable[[str], int] = spawn_self_apply,
@@ -466,11 +361,182 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
             if previous:
                 entry.update(status=previous, detail="already_handled_in_this_run", actions=[], handled=True)
         others = [entry for entry in sessions if not entry["initiator"] and not entry.get("handled")]
+        for entry in others:
+            entry["queueable"] = entry["host"] == "claude"
         resume_outdated(orca, others, state, run_id, system, sleep)
         drive(orca, others, state, time.time() + seconds, sleep, expire="deferred")
-        commit_apply(run_id, mode, sessions, others, spawn)
+        questions = commit_apply(run_id, mode, sessions, others, spawn)
     summary = {status: sum(1 for entry in sessions if entry["status"] == status) for status in {entry["status"] for entry in sessions}}
-    return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred"} for entry in sessions), "run_id": run_id, "summary": summary, "sessions": [public(entry) for entry in sessions]}
+    return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred", "awaiting_answer"} for entry in sessions), "run_id": run_id,
+            "summary": summary, "sessions": [public(entry) for entry in sessions], "questions": [question_view(item) for item in questions]}
+
+
+def apply_codex_sessions(run_id: str, orca: Orca, interrupted: set[str], spawn: Callable[[str], int], system: ProcessOs | None,
+                         sleep: Callable[[float], None]) -> None:
+    """After the Codex install: resume the Codex sessions on replaced folders, the session that ran the skill included, apply
+    to the other Codex sessions as `apply` does, and ask each interrupted session to continue. A busy session goes to the helper."""
+    state = load_run(run_id)
+    mode, handed = state.get("compact_mode", "auto"), time.time()
+    sessions = [entry for entry in plan_sessions(orca, state, mode, []) if entry["host"] == "codex"]
+    for entry in sessions:
+        entry["initiator"] = False
+    resume_outdated(orca, sessions, state, run_id, system, sleep)
+    drive(orca, sessions, state, time.time() + DEFAULT_APPLY_SECONDS, sleep, expire="deferred")
+    for entry in sessions:
+        if entry["handle"] in interrupted:
+            if entry["status"] == "done":
+                send_continue(orca, entry, sleep)
+            else:
+                entry["continue_prompt"] = f"not_sent:{entry['status']}"
+
+    def change(saved: dict) -> dict:
+        deferred = [entry for entry in sessions if entry["status"] == "deferred"]
+        if deferred:
+            handed_off, _ = hand_to_helper(saved, run_id, [follow_item(entry, mode, handed) for entry in deferred], spawn, bool(saved.get("self")))
+            if not handed_off:
+                for entry in deferred:
+                    entry.update(status="skipped", detail="helper_start_failed", actions=[])
+        saved["sessions"] = {**saved.get("sessions", {}), **{entry["handle"]: public(entry) for entry in sessions}}
+        return saved
+
+    update_run(run_id, change)
+
+
+def codex_tick(run_id: str, orca: Orca, acquire: Callable[[], bool], sleep: Callable[[float], None], system: ProcessOs | None,
+               spawn: Callable[[str], int], ignore_env: bool) -> bool:
+    """One pass of the Codex install job saved in the run state; True while it is pending.
+
+    The job waits until every session answered `wait` has ended its turn, presses Esc once in each session answered
+    `interrupt` that is still busy, then takes the lock, rechecks the gate, and installs the way `update` does. It saves
+    the new script path, resumes the Codex sessions on replaced folders, and sends the continue prompt to the interrupted
+    sessions only. At its deadline it installs nothing. `acquire` takes the lock that covers sending to sessions."""
+    job = codex_job.job_of(run_id)
+    if job.get("status") != "pending":
+        return False
+    if time.time() >= job["deadline"]:
+        codex_job.change_job(run_id, status="not_idle_before_deadline")
+        return False
+    if codex_job.waiting_on(job):
+        return True
+    if any(item["state"] in {"queued", "esc_sent"} for item in job["interrupts"]):
+        if not acquire():
+            return True
+        codex_job.interrupt_all(orca, run_id, sleep)
+        job = codex_job.job_of(run_id)
+        if codex_job.waiting_on(job):
+            return True
+    gate = installs.install_gate("codex", ignore_env=True) if ignore_env else installs.install_gate("codex")
+    if gate:
+        if job.get("detail") != gate.code:
+            codex_job.change_job(run_id, detail=gate.code)
+        return True
+    if not acquire():
+        return True
+    entry, blocked = update_host_entry("codex", job.get("ids", []), ignore_env)
+    if blocked:
+        codex_job.change_job(run_id, detail=blocked.code)
+        return True
+
+    def installed(saved: dict) -> dict:
+        saved["hosts"]["codex"] = entry
+        saved["script"] = continuation_script(saved["hosts"])
+        saved["codex_install"] = {**saved["codex_install"], "status": "failed" if "error" in entry else "done", "finished_at": now(),
+                                  **({"detail": entry["error"]["code"]} if "error" in entry else {})}
+        return saved
+
+    update_run(run_id, installed)
+    if "error" not in entry:
+        apply_codex_sessions(run_id, orca, {item["handle"] for item in job["interrupts"] if item["state"] == "interrupted"}, spawn, system, sleep)
+    return False
+
+
+def hand_codex_job(run_id: str, spawn: Callable[[str], int]) -> None:
+    """Give the pending Codex install job to the live helper or a new one; a helper that fails to start fails the job."""
+    def change(saved: dict) -> dict:
+        handed_off, _ = hand_to_helper(saved, run_id, [], spawn, bool(saved.get("self")))
+        if not handed_off:
+            saved["codex_install"].update(status="failed", detail="helper_start_failed")
+        return saved
+
+    update_run(run_id, change)
+
+
+def decide_codex(run_id: str, known: dict, parsed: list[tuple[str, str]], orca: Orca, spawn: Callable[[str], int],
+                 system: ProcessOs | None, sleep: Callable[[float], None]) -> None:
+    """Resolve every Codex answer of the run together. Any `skip` means no Codex update. Otherwise the install job is saved
+    in the run state: with a `wait` answer the detached helper carries it, with only `interrupt` answers it runs here."""
+    choices = dict(parsed)
+    skipped = "skip" in choices.values()
+    waits = [known[question_id]["rollout"] for question_id, choice in parsed if choice == "wait" and known[question_id].get("rollout")]
+    interrupts = [{"handle": known[question_id]["handle"], "rollout": known[question_id].get("rollout"), "state": "queued"}
+                  for question_id, choice in parsed if choice == "interrupt"]
+
+    def change(saved: dict) -> dict:
+        for question_id, choice in parsed:
+            saved["questions"][question_id].update(answer=choice, answered_at=now())
+        base = saved.get("codex_install") or {}
+        if skipped:
+            saved["codex_install"] = {**base, "status": "skipped_by_user", "answers": choices}
+            saved.get("hosts", {}).get("codex", {})["decision"] = "skip"
+            return saved
+        saved["codex_install"] = {**base, "status": "pending", "answers": choices, "requested_at": now(),
+                                  "deadline": time.time() + FOLLOW_UP_SECONDS, "waits": waits, "interrupts": interrupts}
+        if "wait" in choices.values():
+            handed_off, _ = hand_to_helper(saved, run_id, [], spawn, bool(saved.get("self")))
+            if not handed_off:
+                saved["codex_install"].update(status="failed", detail="helper_start_failed")
+        return saved
+
+    state = update_run(run_id, change)
+    if codex_job.pending(state) and "wait" not in choices.values() and codex_tick(run_id, orca, lambda: True, sleep, system, spawn, False):
+        hand_codex_job(run_id, spawn)
+
+
+def command_decide(run_id: str, answers: Sequence[str], spawn: Callable[[str], int] = spawn_self_apply, system: ProcessOs | None = None,
+                   sleep: Callable[[float], None] = time.sleep) -> dict:
+    """Carry out the user's answers to the questions of one run: `wait` hands the session to the helper, `skip` sends
+    nothing, and `interrupt` presses Esc once and applies. Each question takes one answer. The answers to the Codex install
+    questions are resolved together."""
+    parsed = parse_answers(answers)
+    with exclusive("sessions"):
+        state = load_run(run_id)
+        known = state.get("questions", {})
+        if len({question_id for question_id, _ in parsed}) != len(parsed) or any(
+                question_id not in known or known[question_id].get("answer") for question_id, _ in parsed):
+            raise RefreshError("question_unknown", "An answer names a question that this run did not ask or that is already answered.")
+        codex = [(question_id, choice) for question_id, choice in parsed if known[question_id].get("reason") == CODEX_INSTALL]
+        parsed = [item for item in parsed if item not in codex]
+        if codex:
+            checked_codex_answers(known, codex)
+        orca = Orca()
+        entries = [decided_entry(orca, state, known[question_id], choice, system, sleep) for question_id, choice in parsed]
+        mode, handed = state.get("compact_mode", "auto"), time.time()
+
+        def change(saved: dict) -> dict:
+            for question_id, choice in parsed:
+                saved["questions"][question_id].update(answer=choice, answered_at=now())
+            deferred = [entry for entry in entries if entry["status"] == "deferred"]
+            if deferred:
+                handed_off, _ = hand_to_helper(saved, run_id, [follow_item(entry, mode, handed) for entry in deferred], spawn, bool(saved.get("self")))
+                if not handed_off:
+                    for entry in deferred:
+                        entry.update(status="skipped", detail="helper_start_failed", actions=[])
+            saved["sessions"] = {**saved.get("sessions", {}), **{entry["handle"]: public(entry) for entry in entries}}
+            return saved
+
+        if parsed:
+            update_run(run_id, change)
+        if codex:
+            decide_codex(run_id, known, codex, orca, spawn, system, sleep)
+    output = {"ok": all(entry["status"] in {"done", "deferred"} or entry.get("detail") == "skipped_by_user" for entry in entries), "run_id": run_id,
+              "sessions": [public(entry) for entry in entries],
+              "questions": [question_view({**known[question_id], "answer": choice}) for question_id, choice in [*parsed, *codex]]}
+    if codex:
+        saved = load_run(run_id)
+        job = saved.get("codex_install") or {}
+        output.update(codex_install=codex_job.job_view(job), **({"script": saved["script"]} if saved.get("script") else {}))
+        output["ok"] = output["ok"] and job.get("status") in {"pending", "done", "skipped_by_user"}
+    return output
 
 
 def error_result(error: RefreshError) -> dict:
@@ -482,6 +548,8 @@ def command_refresh(also: Sequence[str], installed: bool, mode: str) -> dict:
     update = command_apply_installed(also) if installed else command_update(also)
     output: dict = {"ok": update["ok"], "update": update}
     if all("error" in host for host in update["hosts"].values()):
+        if update.get("questions"):
+            output["questions"] = update["questions"]
         return output
     for name, step in (("apply", lambda: command_apply(update["run_id"], mode, [], DEFAULT_APPLY_SECONDS)),
                        ("orphans", lambda: run_orphans(update["run_id"]))):
@@ -490,6 +558,7 @@ def command_refresh(also: Sequence[str], installed: bool, mode: str) -> dict:
         except RefreshError as error:
             output[name] = error_result(error)
     output["ok"] = update["ok"] and output["apply"]["ok"]
+    output["questions"] = [*update.get("questions", []), *output["apply"].get("questions", [])]
     return output
 
 
@@ -498,7 +567,11 @@ def lock_guard() -> AbstractContextManager:
 
 
 def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None], guard: Callable[[], AbstractContextManager] = nullcontext) -> str:
-    message = f"Plugin refresh run {run_id} finished. Run `{status_command(run_id)}` and report every session, including any that were not refreshed."
+    try:
+        script = load_run(run_id).get("script")
+    except RefreshError:
+        script = None
+    message = f"Plugin refresh run {run_id} finished. Run `{status_command(run_id, script)}` and report every session, including any that were not refreshed."
     notice = {"handle": entry["handle"], "host": entry["host"], "screen_identified": entry.get("screen_identified")}
     deadline = time.time() + NOTIFY_SECONDS
     reason: str | None = "not_attempted"
@@ -521,8 +594,9 @@ def notify(orca: Orca, entry: dict, run_id: str, sleep: Callable[[float], None],
     return f"not_sent:{reason}"
 
 
-def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None) -> int:
-    """The one detached helper: finish deferred sessions and this session, then send one result notice and exit.
+def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None,
+                       system: ProcessOs | None = None) -> int:
+    """The one detached helper: finish deferred sessions, a pending Codex install, and this session, then send one result notice and exit.
 
     It holds the sessions lock only while sending to a session and confirming it, and reads the run state again on
     every pass so sessions that a later `apply` hands over join this helper.
@@ -530,9 +604,9 @@ def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep,
     feed = RunFeed(run_id, FOLLOW_UP_SECONDS, SELF_WAIT_SECONDS)
     with exclusive("run-state", wait_seconds=core.RUN_STATE_WAIT_SECONDS):
         entries = feed.poll()
-    if not entries:
-        return 0
     state = load_run(run_id)
+    if not entries and not codex_job.pending(state):
+        return 0
     orca = Orca()
     guard = SendLock(lock_guard)
 
@@ -554,8 +628,14 @@ def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep,
             pass
 
     record([])
-    follow_up(orca, entries, state, sleep=sleep, waiters=waiters, progress=record, lock=guard,
-              incoming=lambda closing: feed.close() if closing else feed.poll())
+    def job(lock: SendLock) -> bool:
+        waiting = codex_tick(run_id, orca, lock.acquire, sleep, system, spawn_self_apply, True)
+        if not waiting:
+            state["hosts"] = load_run(run_id).get("hosts", state["hosts"])
+        return waiting
+
+    follow_up(orca, entries, state, sleep=sleep, waiters=waiters, progress=record, lock=guard, system=system,
+              incoming=lambda closing: feed.close(codex_job.pending) if closing else feed.poll(), job=job)
     own_entry = next((entry for entry in entries if entry["initiator"]), None)
     finished = now()
 
@@ -578,9 +658,10 @@ def command_self_apply(run_id: str, sleep: Callable[[float], None] = time.sleep,
     return 0
 
 
-def status_command(run_id: str) -> str:
+def status_command(run_id: str, script: str | None = None) -> str:
+    """The status command line; `script` is the saved copy that a Codex install left in place of the deleted one."""
     prefix = f"XDG_STATE_HOME={shlex.quote(os.environ['XDG_STATE_HOME'])} " if os.environ.get("XDG_STATE_HOME") else ""
-    return f"{prefix}python3 {shlex.quote(str(Path(__file__).resolve()))} status --run-id {run_id} --json"
+    return f"{prefix}python3 {shlex.quote(script or str(Path(__file__).resolve()))} status --run-id {run_id} --json"
 
 
 def command_status(run_id: str) -> dict:
@@ -592,6 +673,10 @@ def command_status(run_id: str) -> dict:
         "sessions": list(state.get("sessions", {}).values()),
         "resumed": list(state.get("resumed", {}).values()),
         "not_refreshed": [item for item in state.get("sessions", {}).values() if item.get("status") in {"skipped", "failed", "blocked"}],
+        "questions": [question_view(item) for item in state.get("questions", {}).values()],
+        "unanswered": sum(1 for item in state.get("questions", {}).values() if not item.get("answer")),
+        **({"codex_install": codex_job.job_view(state["codex_install"])} if state.get("codex_install") else {}),
+        **({"script": state["script"]} if state.get("script") else {}),
         "helper_finished_at": state.get("helper_finished_at"),
         "self_finished_at": state.get("self_finished_at"),
         "others_finished_at": state.get("others_finished_at"),
@@ -620,6 +705,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if name == "apply":
             sub.add_argument("--timeout-seconds", type=int, default=DEFAULT_APPLY_SECONDS)
     commands.add_parser("self-apply").add_argument("--run-id", required=True)
+    decide = commands.add_parser("decide")
+    decide.add_argument("--run-id", required=True)
+    decide.add_argument("--answer", action="append", required=True, metavar="QUESTION=wait|interrupt|skip")
+    decide.add_argument("--json", action="store_true")
     resume = commands.add_parser("resume")
     resume.add_argument("--run-id", required=True)
     resume.add_argument("--terminal", action="append", required=True)
@@ -661,6 +750,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = run_orphans(args.run_id)
         elif args.command == "close":
             output = run_close(args.run_id, args.terminal)
+        elif args.command == "decide":
+            output = command_decide(args.run_id, args.answer)
         elif args.command == "apply":
             output = command_apply(args.run_id, args.compact, args.terminal, max(5, args.timeout_seconds))
         else:

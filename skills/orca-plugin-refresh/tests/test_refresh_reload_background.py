@@ -34,6 +34,9 @@ class ReloadWhileBackgroundTaskTest(unittest.TestCase):
 
     def reload_on_send(self, path):
         def respond(fake, handle, text):
+            if text == "/compact":
+                self.write_marker(HANDLE, "claude", digest="d", transcript=path)
+                return
             with path.open("a") as stream:
                 stream.write(json.dumps(RELOADED) + "\n")
         return respond
@@ -89,20 +92,94 @@ class ReloadWhileBackgroundTaskTest(unittest.TestCase):
         self.assertEqual([(HANDLE, "/reload-plugins")], fake.sent)
         self.assertEqual(("done", []), (entries[0]["status"], entries[0]["actions"]))
 
-    def test_compact가_함께_필요하면_백그라운드_작업이_남은_세션에_아무것도_보내지_않고_미룬다(self):
-        """term_demo-a: 지침이 달라 compact도 필요하면 백그라운드 작업이 남은 세션은 준비되지 않은 것으로 보고 reload도 보내지 않은 채 deferred로 남는다."""
+    def test_compact가_함께_필요해도_백그라운드_작업이_남은_세션에_reload만_보내고_compact는_남겨_미룬다(self):
+        """term_demo-a: 지침이 달라 compact도 필요하고 알림이 남았으면 apply는 /reload-plugins만 보내고, 항목은 남은 동작 compact와 끝난 동작 reload를 가진 deferred가 된다."""
         # Given
         path = self.session(OWING, digest="old")
-        fake = FakeOrca([terminal(HANDLE, "claude")], busy={HANDLE: 10**9})
+        fake = FakeOrca([terminal(HANDLE, "claude")], busy={HANDLE: 10**9}, on_send=self.reload_on_send(path))
         sessions = refresh.plan_sessions(fake, self.state, "auto", [])
 
         # When
         refresh.drive(fake, sessions, self.state, time.time() + 0.2, sleep=lambda seconds: time.sleep(0.01), expire="deferred")
 
         # Then
-        self.assertEqual([], fake.sent)
-        self.assertEqual((["reload", "compact"], "deferred"), (sessions[0]["actions"], sessions[0]["status"]))
+        self.assertEqual([(HANDLE, "/reload-plugins")], fake.sent)
+        self.assertEqual((["compact"], ["reload"], "deferred"), (sessions[0]["actions"], sessions[0]["completed"], sessions[0]["status"]))
         self.assertTrue(path.is_file())
+
+    def test_알림이_남은_세션은_Orca가_쉬는_중이라고_해도_reload만_보내고_compact는_보내지_않는다(self):
+        """term_demo-a: reload와 compact가 남고 알림이 남았을 때 Orca가 쉬는 중이라고 보고해도 tui-idle로 넘어가 compact를 보내지 않고 reload만 보낸다."""
+        # Given
+        path = self.session(OWING, digest="old")
+        fake = FakeOrca([terminal(HANDLE, "claude")], on_send=self.reload_on_send(path))
+        sessions = refresh.plan_sessions(fake, self.state, "auto", [])
+
+        # When
+        refresh.drive(fake, sessions, self.state, time.time() + 0.2, sleep=lambda seconds: time.sleep(0.01), expire="deferred")
+
+        # Then
+        self.assertEqual([(HANDLE, "/reload-plugins")], fake.sent)
+        self.assertEqual((["compact"], "deferred"), (sessions[0]["actions"], sessions[0]["status"]))
+
+    def test_도우미는_알림이_남은_동안_reload만_보내고_기한까지_compact를_보내지_않는다(self):
+        """term_demo-a: reload와 compact가 남은 항목을 받은 도우미는 기한 안에 /reload-plugins를 보내고, 알림이 남은 채로 기한이 되면 compact 없이 not_idle_before_deadline으로 끝난다."""
+        # Given
+        path = self.session(OWING, digest="old")
+        entries = [self.deferred(path, ["reload", "compact"])]
+
+        # When
+        fake = self.follow(entries, self.reload_on_send(path))
+
+        # Then
+        self.assertEqual([(HANDLE, "/reload-plugins")], fake.sent)
+        self.assertEqual(("skipped", "not_idle_before_deadline", ["reload"]), (entries[0]["status"], entries[0]["detail"], entries[0]["completed"]))
+
+    def test_알림이_남은_세션에_compact만_남아도_도우미는_보내지_않는다(self):
+        """term_demo-a: 남은 동작이 compact뿐이고 알림이 남았으면 도우미는 Orca가 쉬는 중이어도 아무것도 보내지 않고 not_idle_before_deadline으로 끝난다."""
+        # Given
+        path = self.session(OWING, digest="old")
+        entries = [self.deferred(path, ["compact"], detail="background_task")]
+        fake = FakeOrca([terminal(HANDLE, "claude")], on_send=self.reload_on_send(path))
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=lambda seconds: time.sleep(0.01))
+
+        # Then
+        self.assertEqual([], fake.sent)
+        self.assertEqual(("skipped", "not_idle_before_deadline"), (entries[0]["status"], entries[0]["detail"]))
+
+    def test_알림을_받고_차례가_끝나면_도우미가_그때_compact를_보내고_done으로_끝낸다(self):
+        """term_demo-a: reload 뒤 알림이 남은 동안은 compact를 보내지 않다가, 작업 알림을 받은 차례가 끝나 남은 알림이 없으면 /compact를 보내고 done이 된다."""
+        # Given
+        path = self.session(OWING, digest="old")
+        entries = [self.deferred(path, ["reload", "compact"])]
+        entries[0]["deadline"] = time.time() + 10
+        notice = user_record("<task-notification>\n<task-id>bg1</task-id>\n<status>completed</status>\n</task-notification>")
+        fake = FakeOrca([terminal(HANDLE, "claude")], busy={HANDLE: 10**9})
+        fake.never_idle = {HANDLE}
+        sent_before_notice = []
+        polls_after_reload = []
+
+        def sleep(seconds):
+            time.sleep(0.01)
+            if not fake.sent or sent_before_notice:
+                return
+            polls_after_reload.append(None)
+            if len(polls_after_reload) == 5:
+                sent_before_notice.extend(fake.sent)
+                with path.open("a") as stream:
+                    for record in (notice, assistant_record(), turn_end()):
+                        stream.write(json.dumps(record) + "\n")
+
+        fake.on_send = self.reload_on_send(path)
+
+        # When
+        refresh.follow_up(fake, entries, self.state, sleep=sleep)
+
+        # Then
+        self.assertEqual([(HANDLE, "/reload-plugins")], sent_before_notice)
+        self.assertEqual([(HANDLE, "/reload-plugins"), (HANDLE, "/compact")], fake.sent)
+        self.assertEqual(("done", ["reload", "compact"]), (entries[0]["status"], entries[0]["completed"]))
 
 
 class ReloadOwedAfterHandoffTest(unittest.TestCase):

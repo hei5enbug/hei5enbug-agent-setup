@@ -158,8 +158,8 @@ def refresh_companion(host: str, plugin_id: str, update: bool, context: dict) ->
                 raise RefreshError(f"{host}_plugin_missing", f"The {host} plugin is not installed and enabled exactly once after the update.")
             result["after_version"] = found["version"]
         after_hooks = validate_companion(host, plugin_id, found)
+        result.update(root=str(found["root"]), previous_root=previous_root)
         if host == "codex":
-            result.update(root=str(found["root"]), previous_root=previous_root)
             result["installed_at"] = install_time(found["root"])
         result["status"] = "updated" if result["after_version"] != result["before_version"] else "current"
         if update and host == "codex" and ((after_hooks is not None and plugin_id.partition("@")[2] in context.get("release_pins", {}))

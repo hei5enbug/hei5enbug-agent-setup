@@ -20,6 +20,7 @@ import refresh_resume
 import refresh_sessions
 
 ProcessOs = refresh_process.ProcessOs
+REAL_ENABLED_COUNT = refresh_reload.enabled_count
 HANDLE = "term_claude"
 SESSION_ID = "11111111-2222-3333-4444-555555555555"
 CONFIG_DIR = "/home/test/profile dir/home"
@@ -271,6 +272,45 @@ class ReloadAnswerTest(ResumeCase):
         self.assertNotIn("plugin_load", entry)
 
 
+class BuiltinPluginsReloadTest(ResumeCase):
+    PLUGINS = [*({"id": f"demo-{number}@demo-market", "enabled": True} for number in range(7)),
+               {"id": "demo-local", "enabled": True},
+               *({"id": f"demo-b{number}@builtin", "enabled": True} for number in range(6))]
+
+    def judge(self, plugins):
+        self.enabled_count.side_effect = REAL_ENABLED_COUNT
+        entry = {"handle": HANDLE, "worktree": self.temp.name}
+        listed = type("Listed", (), {"returncode": 0, "stdout": json.dumps(self.PLUGINS)})()
+        report = {"plugins": plugins, "skills": 56, "agents": 14, "hooks": 20, "errors": 0}
+        with patch.object(refresh_reload.core, "executable", return_value=CLAUDE_PATH), \
+                patch.object(refresh_reload.subprocess, "run", return_value=listed):
+            return refresh_reload.judge_reload(entry, report), entry
+
+    def test_builtin을_뺀_수만큼_불러온_reload_답은_done이다(self):
+        """term_demo-a: 활성 목록에 @builtin 6개가 있어도 기대 수는 8이므로 플러그인 8개를 불러온 보고는 done이다."""
+        # Given
+        loaded = 8
+
+        # When
+        outcome, entry = self.judge(loaded)
+
+        # Then
+        self.assertEqual("done", outcome)
+        self.assertNotIn("plugin_load", entry)
+
+    def test_builtin을_뺀_수보다_적게_불러온_reload_답은_plugin_load_error로_실패한다(self):
+        """term_demo-a: 기대 수 8보다 적은 7개를 불러왔으면 @builtin을 빼고도 plugin_load_error로 실패하고 기대 수 8을 남긴다."""
+        # Given
+        loaded = 7
+
+        # When
+        outcome, entry = self.judge(loaded)
+
+        # Then
+        self.assertEqual("failed:plugin_load_error", outcome)
+        self.assertEqual(8, entry["plugin_load"]["expected_plugins"])
+
+
 class EnabledCountTest(unittest.TestCase):
     PLUGINS = [{"id": "a", "enabled": True}, {"id": "b", "enabled": False}, {"id": "c", "enabled": True}, "x", {"id": "d"}]
 
@@ -296,6 +336,19 @@ class EnabledCountTest(unittest.TestCase):
         self.assertNotIn("CLAUDE_CODE_PLUGIN_DIRS", environment)
         self.assertEqual(CONFIG_DIR, environment["CLAUDE_CONFIG_DIR"])
         self.assertEqual("/usr/bin", environment["PATH"])
+
+    def test_builtin_마켓의_활성_플러그인은_기대_수에서_뺀다(self):
+        """term_demo-a: @builtin으로 끝나는 활성 ID는 세지 않고, 마켓이 없는 인라인 세션 플러그인과 다른 마켓의 ID는 센다."""
+        # Given
+        self.PLUGINS = [*({"id": f"demo-{number}@demo-market", "enabled": True} for number in range(7)),
+                        {"id": "demo-local", "enabled": True},
+                        *({"id": f"demo-b{number}@builtin", "enabled": True} for number in range(6))]
+
+        # When
+        count, _ = self.run_count({"CLAUDE_CONFIG_DIR": CONFIG_DIR})
+
+        # Then
+        self.assertEqual(8, count)
 
     def test_홈_폴더_세션이_같은_플러그인을_두_번_나열해도_서로_다른_플러그인_수로_센다(self):
         """사용자 기록과 홈 폴더 프로젝트 기록이 한 플러그인을 두 번 나열해도 기대 수는 플러그인 ID 기준으로 센다."""

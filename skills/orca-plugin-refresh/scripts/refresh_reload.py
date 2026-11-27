@@ -65,7 +65,8 @@ def enabled_count(session_env: Mapping[str, str], cwd: str | None) -> int | None
         return None
     if not isinstance(plugins, list):
         return None
-    return len({item.get("id") for item in plugins if isinstance(item, dict) and item.get("enabled") is True})
+    return len({item.get("id") for item in plugins if isinstance(item, dict) and item.get("enabled") is True
+                and str(item.get("id")).rpartition("@")[2] != "builtin"})
 
 
 def expected_plugins(entry: dict) -> int | None:
@@ -101,3 +102,35 @@ def judge_reload(entry: dict | None, report: dict | None) -> str:
     if entry is not None:
         entry["plugin_load"] = {**report, **({"expected_plugins": expected} if expected is not None else {})}
     return "failed:plugin_load_error"
+
+
+def declares_mcp(root: object) -> bool | None:
+    """True when the plugin folder declares MCP servers, False when it declares none, None when it cannot be read."""
+    if not isinstance(root, str) or not Path(root).is_dir():
+        return None
+    base = Path(root)
+    if (base / ".mcp.json").exists():
+        return True
+    manifest = base / ".claude-plugin" / "plugin.json"
+    if not manifest.exists():
+        return False
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return isinstance(payload, dict) and "mcpServers" in payload
+
+
+def reload_may_need_force(target: dict, marker: dict | None) -> bool:
+    """True when `/reload-plugins` may be refused until `--force`: a plugin this run changed for the session declares MCP
+    servers in its loaded or installed root, or a root or the marker cannot be read. A plugin changed outside this run
+    is not predicted."""
+    loaded = marker.get("root") if isinstance(marker, dict) else None
+    installed = target.get("root")
+    if not isinstance(loaded, str) or not isinstance(installed, str):
+        return True
+    roots: list[object] = [loaded, installed] if loaded != installed else []
+    for plugin in target.get("plugins") or []:
+        if isinstance(plugin, dict) and plugin.get("status") == "updated":
+            roots.extend((plugin.get("previous_root"), plugin.get("root")))
+    return any(declares_mcp(root) is not False for root in roots)

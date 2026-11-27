@@ -159,7 +159,7 @@ class RefreshReloadTaskTest(unittest.TestCase):
         # Then
         by_status = {session["terminal"].removeprefix("…"): session["status"] for session in output["apply"]["sessions"]}
         self.assertEqual(by_status["demo_a"], "done")
-        self.assertEqual({"ok", "update", "apply", "orphans"}, set(output))
+        self.assertEqual({"ok", "update", "apply", "orphans", "questions"}, set(output))
         self.assertTrue(output["orphans"]["ok"])
         self.assertEqual(self.grade(DONE_ANSWER), {"reload-sent-to-running-session": True, "nothing-else-sent-to-running-session": True,
                                                    "nothing-sent-to-control-session": True,

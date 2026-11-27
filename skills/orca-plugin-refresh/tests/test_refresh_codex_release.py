@@ -51,8 +51,8 @@ class ReleasePinTest(unittest.TestCase):
         # Then
         self.assertEqual(str((current_root / relative).resolve()), shlex.split(command)[1])
         self.assertIn("--also demo@market", command)
-    def test_첫_Codex_실행_전에_최신_정식_태그를_고정하고_태그_없는_마켓은_설치하지_않는다(self):
-        """정식 태그가 있는 마켓은 첫 Codex 실행 전에 고정하고 태그 없는 마켓은 설정을 보존하고 설치하지 않는다."""
+    def test_첫_Codex_실행_전에_최신_정식_태그의_커밋_SHA를_고정하고_태그_없는_마켓은_설치하지_않는다(self):
+        """정식 태그가 있는 마켓은 첫 Codex 실행 전에 태그 이름이 아닌 그 태그의 커밋 SHA로 고정하고 태그 없는 마켓은 설정을 보존하고 설치하지 않는다."""
         # Given
         fake = base.FakeCli()
         self.stage(fake)
@@ -79,10 +79,28 @@ class ReleasePinTest(unittest.TestCase):
 
         # Then
         self.assertTrue(observed)
-        self.assertEqual({"v1.3.0"}, set(observed))
+        self.assertEqual({"b" * 40}, set(observed))
         self.assertEqual("main", releases.read_config()[2]["marketplaces"]["empty"]["ref"])
         self.assertEqual("codex_marketplace_untagged", result["hosts"]["codex"]["plugins"][0]["code"])
         self.assertFalse(any(call[-1] in {"empty", "demo@empty"} for call in fake.installs()))
+
+    def test_보류_중에는_이미_커밋_SHA로_고정된_마켓을_고정된_릴리스로_알아보고_설정을_바꾸지_않는다(self):
+        """설치가 보류된 실행에서 ref가 이미 광고된 태그의 커밋 SHA이면 그 태그로 고정된 것으로 보고 ref를 그대로 둔다."""
+        # Given
+        config = self.base / "codex-home/config.toml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(f'[marketplaces.hei5enbug]\nsource_type = "git"\nsource = "https://example.com/main.git"\nref = "{"b" * 40}"\n')
+        context = {}
+
+        # When
+        with patch.object(releases, "remote_tags", return_value={"v1.2.0": "a" * 40, "v1.3.0": "b" * 40}):
+            releases.prepare_marketplaces([refresh.PLUGIN_ID], context, advance=False)
+
+        # Then
+        self.assertEqual({}, context["release_errors"])
+        self.assertEqual({"source": "https://example.com/main.git", "ref": "v1.3.0", "revision": "b" * 40},
+                         context["release_pins"]["hei5enbug"])
+        self.assertEqual("b" * 40, releases.read_config()[2]["marketplaces"]["hei5enbug"]["ref"])
 
     def test_활성_Codex_턴에서는_목록_조회도_실행하지_않는다(self):
         """목록 조회도 자동 설치를 일으킬 수 있으므로 활성 턴에서는 Codex 명령을 보내지 않는다."""
@@ -106,7 +124,7 @@ class ReleasePinTest(unittest.TestCase):
 
 class CompanionTrustTest(unittest.TestCase):
     def test_태그와_같은_동반_훅만_신뢰하고_외부_명령과_변조된_파일은_거부한다(self):
-        """릴리스 원본과 같은 파일만 신뢰하며 외부 명령과 변조 파일에서는 신뢰 쓰기를 하지 않는다."""
+        """릴리스 원본과 같은 파일만 신뢰하며 두 부분 해시는 훅 부분과 내용 부분으로 나누어 쓰고, 외부 명령과 변조 파일에서는 신뢰 쓰기를 하지 않는다."""
         # Given
         with tempfile.TemporaryDirectory() as directory:
             repo, root = Path(directory) / "remote", Path(directory) / "installed"
@@ -126,8 +144,8 @@ class CompanionTrustTest(unittest.TestCase):
             git("-c", "user.name=Demo", "-c", "user.email=demo@example.com", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
             git("tag", "v1.0.0")
             pin = {"source": str(repo), "ref": "v1.0.0", "revision": git("rev-parse", "HEAD")}
-            (root / releases.INSTALL_MARKER).write_text(json.dumps({"source": str(repo), "ref_name": "v1.0.0", "revision": pin["revision"]}))
-            hook = {"pluginId": "demo@market", "key": "demo@market:hook", "trustStatus": "modified", "currentHash": "current",
+            (root / releases.INSTALL_MARKER).write_text(json.dumps({"source": str(repo), "ref_name": pin["revision"], "revision": pin["revision"]}))
+            hook = {"pluginId": "demo@market", "key": "demo@market:hook", "trustStatus": "modified", "currentHash": "sha256:hookpart/sha256:contentpart",
                     "sourcePath": str(root / "hooks/hooks.json"), "command": f"python3 {shlex.quote(str(root / 'scripts/run.py'))}"}
             outcomes = []
             written_paths = []
@@ -138,7 +156,7 @@ class CompanionTrustTest(unittest.TestCase):
                     (root / "scripts/run.py").write_text("print('changed')\n")
                 def app_server(command, env, cwd, batch, timeout):
                     calls.extend(method for method, _ in batch)
-                    written_paths.extend(params["keyPath"] for method, params in batch if method == "config/value/write")
+                    written_paths.extend((params["keyPath"], params["value"]) for method, params in batch if method == "config/value/write")
                     trusted = any(method == "config/value/write" for method, _ in batch)
                     return [{"data": [{"cwd": cwd, "hooks": [{**selected, "trustStatus": "trusted" if trusted else "modified"}]}]}]
                 plugin = {"plugin": "demo@market", "root": str(root), "warnings": [dict(refresh.HOOKS_TRUST_WARNING)]}
@@ -152,7 +170,8 @@ class CompanionTrustTest(unittest.TestCase):
 
         # Then
         self.assertEqual([(True, False), (False, True), (False, True)], outcomes)
-        self.assertEqual(['hooks.state."demo@market:hook".trusted_hash'], written_paths)
+        self.assertEqual([('hooks.state."demo@market:hook".trusted_hash', "sha256:hookpart"),
+                          ('hooks.state."demo@market:hook".trusted_content_hash', "sha256:contentpart")], written_paths)
 
 
 class CodexResumeTest(resume_base.ResumeCase):

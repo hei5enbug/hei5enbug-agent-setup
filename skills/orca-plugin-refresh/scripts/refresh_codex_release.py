@@ -100,12 +100,14 @@ def prepare_marketplaces(ids: list[str], context: dict, advance: bool = True) ->
             tags = remote_tags(source)
             if not tags:
                 raise core.RefreshError(UNTAGGED, "No release tag is advertised; the ref is unchanged. Any Codex start can still install untagged commits until the marketplace has a tag or its ref is set.")
-            tag = max(tags, key=lambda item: tuple(map(int, TAG.fullmatch(item).groups()))) if advance else entry.get("ref")
+            current = entry.get("ref")
+            tag = (max(tags, key=lambda item: tuple(map(int, TAG.fullmatch(item).groups()))) if advance
+                   else current if current in tags else next((item for item, revision in tags.items() if revision == current), None))
             if tag not in tags:
                 raise core.RefreshError("codex_marketplace_unpinned", "The marketplace is not pinned to an advertised release; its ref stays unchanged while installation is deferred.")
             pins[name] = {"source": source, "ref": tag, "revision": tags[tag]}
-            if entry.get("ref") != tag:
-                refs[name] = tag
+            if current != tags[tag]:
+                refs[name] = tags[tag]
         except core.RefreshError as error:
             errors[name] = error
     if refs:
@@ -147,7 +149,7 @@ def verify_files(root: Path, plugin: str, pin: dict) -> None:
         marker = json.loads((root / INSTALL_MARKER).read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise core.CODEX_HOOK_TRUST.TrustError("the marketplace install revision is unavailable") from error
-    if any(marker.get(key) != pin[value] for key, value in (("source", "source"), ("ref_name", "ref"), ("revision", "revision"))):
+    if any(marker.get(key) != pin[value] for key, value in (("source", "source"), ("ref_name", "revision"), ("revision", "revision"))):
         raise core.CODEX_HOOK_TRUST.TrustError("the installed revision does not match the pinned remote release")
     if remote_tags(pin["source"]).get(pin["ref"]) != pin["revision"]:
         raise core.CODEX_HOOK_TRUST.TrustError("the remote release changed during refresh")

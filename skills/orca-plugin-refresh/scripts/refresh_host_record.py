@@ -270,3 +270,18 @@ def record_state(host: str, path: object, now: float | None = None, detailed: bo
         return claude_turn(records, now, earlier, stale) if detailed else claude_state(records, now, earlier, stale)
     except OSError:
         return None
+
+
+def background_pending(path: object) -> bool | None:
+    """True when a background task, subagent, monitor, or wakeup of a Claude Code transcript may still report back, whatever
+    state the turn is in; None when the transcript cannot tell."""
+    if not isinstance(path, str) or not path or not Path(path).is_file():
+        return None
+    try:
+        tail = transcript_tail(path)
+        if tail is None:
+            return None
+        records, boundary = tail
+        return owes_notification(records, time.time(), earlier_pending(path, boundary) if boundary else None)
+    except OSError:
+        return None

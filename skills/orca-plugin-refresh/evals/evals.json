@@ -60,13 +60,13 @@
     },
     {
       "id": 6,
-      "prompt": "The update returned `codex_turn_in_progress` for Codex, and its companion plugins as `deferred`. Try again and finish the refresh.",
-      "expected_output": "The agent reports the deferred Codex host with its root and recovery command, tells the user to run the update again after the Codex turn ends, does not retry on its own, and applies only the host that updated.",
+      "prompt": "Run the plugin refresh. In this simulation, `update` returns `codex_turn_in_progress` for Codex with its companion plugins `deferred` and the `recovery_command`, and a `questions` list holding question `q1` for the busy Codex session `term_demo-a` with the options wait, interrupt, and skip, and Claude Code updated normally.",
+      "expected_output": "The agent reports the deferred Codex host with its root, asks the user about q1 with the question tool offering wait, interrupt, and skip with their effects, and then runs `decide` with the chosen answer; it does not tell the user to run the update again and does not retry on its own.",
       "files": [],
       "expectations": [
-        "The agent does not repeat the update on its own while the Codex turn is still running.",
-        "The Codex root, the deferral code, and the recovery command are reported.",
-        "The agent tells the user to run the update again after the Codex turn ends.",
+        "The agent does not repeat the update on its own and does not tell the user to run the update again after the Codex turn ends.",
+        "The Codex root and the deferral code are reported.",
+        "The agent asks the question for `term_demo-a` with the three options wait, interrupt, and skip, then runs `decide` with `--answer q1=<choice>`.",
         "The Codex sessions are not applied while that host has an update error; the Claude Code host can proceed."
       ]
     },
@@ -91,6 +91,29 @@
         "The agent reports `plugin_id_invalid` and that the second entry is the problem.",
         "The agent does not guess a corrected ID, edit the entry, or retry on its own.",
         "No `apply` runs, because the update produced no run."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Run the plugin refresh. In this simulation, `apply` returns one session `term_demo-a` as `awaiting_answer` with the reason `dialog_open`, a `questions` list holding question `q1` for it with the options wait, interrupt, and skip, and no other problem.",
+      "expected_output": "The agent asks the user about q1 with the question tool, offering wait, interrupt, and skip with their effects, before any other report, and then runs `decide` with the chosen answer.",
+      "files": [],
+      "expectations": [
+        "The agent asks the question for `term_demo-a` before it reports the update result or any other session.",
+        "The question offers the three options wait, interrupt, and skip, and says that interrupt declines the open prompt.",
+        "The agent sends no keystroke or command to the session by hand.",
+        "After the user answers, the agent runs `decide` with `--answer q1=<choice>` and never passes `--force`."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "I updated the plugin outside this skill. Apply the installed version to my Orca sessions. In this simulation, `apply` returns the Codex session `term_demo-a` as `done` with `completed` `resumed`, because its loaded plugin folder was replaced and it was idle with an empty input line, and no other problem.",
+      "expected_output": "The agent reports the Codex session as resumed and refreshed, asks no resume approval question, and does not run the `resume` command.",
+      "files": [],
+      "expectations": [
+        "The agent reports `term_demo-a` as `done` with `resumed`.",
+        "The agent does not ask the user to approve a resume for that session and does not run `resume`.",
+        "The agent sends no command to Orca terminals by hand."
       ]
     }
   ]

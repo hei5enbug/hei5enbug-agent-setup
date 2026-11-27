@@ -1,11 +1,13 @@
 # Resume a session
 
 `apply` runs this resume by itself, before it sends anything, for each other Claude Code session that reports
-`host_release_outdated` and passes every check below; it does not ask. A resumed session gets no `/reload-plugins`,
+`host_release_outdated` and each other Codex session on a replaced plugin folder that passes every check below; it does not ask. A resumed session gets no `/reload-plugins`,
 because the new process loads the installed plugins at start, and it gets `/compact` afterwards only when its loaded
 instructions are stale, so the conversation ends with one copy of the current instructions. A session that fails a
 check stays as planned, shows the failed check in `resume_check`, and is offered once for approval. A session with
-`plugin_load_error` is never resumed without approval.
+`plugin_load_error` is never resumed without approval. A busy Codex session is `deferred` with the remaining action
+`resume`, which the helper carries out without asking once its rollout records the end of the turn; a check that fails
+then ends it `skipped` with `resume_check`.
 
 Run the `resume` subcommand only for a Claude Code or Codex session that reports `resume_approval_needed`, and only for the
 terminals the user approved in the current request. Run `python3 <script> resume --run-id <run_id> --terminal <handle> --json`, repeating
@@ -16,7 +18,8 @@ from the rollout's `session_meta` record, keeps its process's `CODEX_HOME` and l
 `codex resume <thread ID>` in the same terminal after `/exit`. It drops the old prompt, old resume selector, `--last`,
 and `--all`. Unknown options or an unreadable help response stop it before `/exit`. It applies the same idle,
 empty-input, process-exit, and conversation checks below; it also confirms the current plugin root and digest in the
-new marker. Codex receives no `/reload-plugins`. A successful resume removes its not-refreshed status.
+new marker. Codex receives no `/reload-plugins`. A successful resume removes its not-refreshed status. After a Codex
+install that `decide` carried out, this resume applies to every Codex session on a replaced folder.
 
 ## What the script does
 

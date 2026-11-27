@@ -22,6 +22,8 @@ MOVED = (
      "Before drawing a group or subgroup, read `references/groups.md`."),
     ("orca-plugin-refresh", "SKILL.md", "safety-and-limits.md",
      "Before explaining to the user why the script skipped, deferred, or failed a session, and before a manual finish, read `references/safety-and-limits.md`."),
+    ("orca-plugin-refresh", "SKILL.md", "busy-sessions.md",
+     "Before asking a question the script returns in `questions`, or running `decide`, read `references/busy-sessions.md`."),
     ("document-to-confluence", "references/confluence-body.md", "confluence-images.md",
      "Before writing a page that has images, read `references/confluence-images.md`."),
     ("document-to-confluence", "references/confluence-body.md", "confluence-inline-comments.md",

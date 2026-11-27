@@ -9,14 +9,19 @@ from typing import Callable
 import refresh_install as installs
 import refresh_sessions as driver
 from refresh_core import RefreshError, parse_time
+from refresh_dialog import answer_compact_dialog, dialog_open
+from refresh_host_record import record_state
 from refresh_install import validate_install
 from refresh_orca import Orca
+from refresh_process import ProcessOs
+from refresh_resume import resume_deferred
 from refresh_sessions import FINAL_STATUSES, OPEN_STATUSES, compact_reason, host_record, release_held, step, terminal_gone
 
 
 IDLE_CONFIRM_SECONDS = 3.0
 INSTALL_CHECK_SECONDS = 30.0
-WAITING_DETAILS = ("busy", "waiting_for_idle", "deadline_reached", "turn_started")
+TIMESTAMP_RESOLUTION = 0.001
+WAITING_DETAILS = ("busy", "waiting_for_idle", "deadline_reached", "turn_started", "background_task")
 
 
 class IdleWaiters:
@@ -201,6 +206,70 @@ def reloaded_since_handoff(entry: dict) -> bool:
     return any(driver.transcript_outcome(entry["host"], "reload", [record], entry) == "done" for record in records)
 
 
+def queued_outcome(entry: dict, state: dict) -> str | None:
+    """The result of the first queued command, from transcript records after the queue offset or, for a compaction, from
+    a marker rewritten after the queue time that passes the automatic compaction check."""
+    action = entry["queued"][0]
+    outcome = driver.transcript_outcome(entry["host"], action, driver.transcript_records(entry.get("queue_transcript"), entry.get("queue_offset", 0)), entry)
+    if outcome or action != "compact":
+        return outcome
+    marker = driver.read_marker(entry["handle"])
+    written = parse_time((marker or {}).get("written_at")) or 0.0
+    if marker and written + TIMESTAMP_RESOLUTION >= entry.get("queued_at", float("inf")) and compact_reason(entry["host"], marker, state["hosts"][entry["host"]], "auto") is None:
+        return "done"
+    return None
+
+
+def queued_progress(orca: Orca, entry: dict, state: dict, cache: dict[str, tuple[float, bool]], lock: SendLock) -> bool:
+    """Confirm the commands typed into the session while its turn was in progress, sending nothing more. True when this
+    pass is finished with the entry; False once the queue is given up and the ordinary path takes over."""
+    if not install_current(entry["host"], state["hosts"][entry["host"]], cache):
+        entry.update(status="skipped", detail="install_changed", actions=[])
+        return True
+    outcome = queued_outcome(entry, state)
+    if outcome:
+        entry["queued"].pop(0)
+        if outcome == "nothing_to_compact" and driver.claude_has_prompts((driver.read_marker(entry["handle"]) or {}).get("transcript_path")):
+            driver.compaction_refused(entry)
+        elif outcome == "nothing_to_compact":
+            entry["actions"][0] = "clear"
+            entry.update(queued=[], detail="empty_session_needs_clear")
+            return False
+        else:
+            driver.finish(entry, outcome)
+        if entry["status"] != "pending":
+            entry["queued"] = []
+        return True
+    entry["detail"] = "commands_queued"
+    turn = record_state(entry["host"], (driver.read_marker(entry["handle"]) or {}).get("transcript_path"), detailed=True)
+    if turn not in ("idle", "owing"):
+        entry.pop("queue_idle_since", None)
+        return True
+    if "compact" in entry["queued"]:
+        try:
+            lines = orca.screen(entry["handle"])[0]
+        except RefreshError:
+            return True
+        if dialog_open(lines):
+            if lock.acquire() and answer_compact_dialog(orca, entry, lines).startswith("failed:"):
+                entry.update(status="failed", detail="compact_dialog_open", actions=[], queued=[])
+            return True
+    limits = {"reload": driver.RELOAD_TIMEOUT, "compact": driver.COMPACT_TIMEOUT}
+    ended = entry.setdefault("queue_idle_since", time.time())
+    if time.time() - ended <= max(limits.get(action, driver.RELOAD_TIMEOUT) for action in entry["queued"]):
+        return True
+    entry.update(queued=[], detail="waiting_for_idle")
+    entry.pop("queue_idle_since", None)
+    return False
+
+
+def deadline_detail(entry: dict) -> str:
+    """Why a pending entry ends `skipped` at the one-hour limit: its own reason unless it was only waiting for the session."""
+    if entry.get("queued"):
+        return "queued_unconfirmed"
+    return "not_idle_before_deadline" if entry.get("detail") in (None, *WAITING_DETAILS) else entry["detail"]
+
+
 def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, bool]], waiters: IdleWaiters) -> None:
     """Finish an entry the session already brought up to date itself since the handoff, even while busy. Sends nothing."""
     host = entry["host"]
@@ -219,12 +288,14 @@ def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, b
 
 def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[float], None] = time.sleep, waiters: IdleWaiters | None = None,
               progress: Callable[[list[dict]], None] | None = None, lock: SendLock | None = None,
-              incoming: Callable[[bool], list[dict]] | None = None) -> None:
+              incoming: Callable[[bool], list[dict]] | None = None, job: Callable[[SendLock], bool] | None = None,
+              system: ProcessOs | None = None) -> None:
     """Apply deferred sessions when Orca reports them idle, each before its own deadline, then end every wait.
 
     `progress` receives the entries that reached a final status since its last call. `lock` is taken only to send
     to a session and kept until every command in flight is confirmed. `incoming(closing)` returns entries that
-    joined meanwhile; they are added to `entries`, and a final-status entry of the same handle is replaced.
+    joined meanwhile; they are added to `entries`, and a final-status entry of the same handle is replaced. `job` runs
+    once per pass and returns True while its work is pending, which keeps the loop alive without any session.
     """
     waiters = waiters or IdleWaiters(orca)
     lock = lock or SendLock()
@@ -251,9 +322,16 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
         while True:
             if incoming:
                 join(incoming(False))
+            pending_job = bool(job and job(lock))
             active = [entry for entry in entries if entry["status"] in OPEN_STATUSES or entry.get("input_held")]
             if not active:
+                if pending_job:
+                    lock.release()
+                    sleep(driver.POLL_SECONDS)
+                    continue
                 if incoming and join(incoming(True)):
+                    continue
+                if job and job(lock):
                     continue
                 return
             try:
@@ -272,8 +350,9 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                         entry.update(status="skipped", detail="terminal_gone", actions=[])
                         continue
                     if time.time() >= entry["deadline"]:
-                        busy = entry.get("detail") in (None, *WAITING_DETAILS)
-                        entry.update(status="skipped", detail="not_idle_before_deadline" if busy else entry["detail"], actions=[])
+                        entry.update(status="skipped", detail=deadline_detail(entry), actions=[])
+                        continue
+                    if entry.get("queued") and (queued_progress(orca, entry, state, cache, lock) or entry["status"] != "pending"):
                         continue
                     applied_by_session(entry, state, cache, waiters)
                     if entry["status"] != "pending":
@@ -286,7 +365,7 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                         needed = current_actions(entry, state)
                         record = host_record(entry, needed)
                         idle = waiters.take(handle)
-                        if record == "busy" or (record is None and idle is None):
+                        if record in ("busy", "owing") or (record is None and idle is None):
                             waiters.start(handle, entry["deadline"])
                             entry["detail"] = "waiting_for_idle"
                             continue
@@ -299,12 +378,15 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                     if entry["status"] != "pending":
                         continue
                     if time.time() >= entry["deadline"]:
-                        entry.update(status="skipped", detail="not_idle_before_deadline", actions=[])
+                        entry.update(status="skipped", detail=deadline_detail(entry), actions=[])
                         continue
                 if not lock.acquire():
                     continue
                 try:
-                    step(orca, entry, state["hosts"][entry["host"]], live)
+                    if entry["status"] == "pending" and entry["actions"][:1] == ["resume"]:
+                        resume_deferred(orca, entry, state, system, sleep)
+                    else:
+                        step(orca, entry, state["hosts"][entry["host"]], live)
                 except RefreshError as error:
                     entry.update(status="failed", detail=error.code, actions=[])
             if not sending(entries):

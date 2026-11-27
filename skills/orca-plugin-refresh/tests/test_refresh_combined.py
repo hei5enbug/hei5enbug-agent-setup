@@ -81,7 +81,7 @@ class RefreshCommandTest(unittest.TestCase):
         self.assertEqual((["demo@market"],), calls.log[0][1])
         self.assertEqual((RUN_ID, "never", [], 20), calls.log[1][1])
         self.assertEqual((RUN_ID,), calls.log[2][1])
-        self.assertEqual({"ok", "update", "apply", "orphans"}, set(output))
+        self.assertEqual({"ok", "update", "apply", "orphans", "questions"}, set(output))
         self.assertEqual((0, True), (code, output["ok"]))
 
     def test_모든_호스트가_오류면_apply와_orphans를_돌리지_않고_update_결과만_내며_종료_코드_2다(self):

@@ -163,8 +163,8 @@ class OrphanedRefreshTest(OrphanCase):
         # Then
         self.assertEqual(("done", "host_record"), (result["sessions"][0]["status"], result["sessions"][0]["ready_signal"]))
 
-    def test_기록이_진행_중인_고아_세션은_보내지_않고_helper에_넘긴다(self):
-        """고아 세션이어도 호스트 기록이 진행 중이면 보내지 않고 deferred로 넘기며 helper 항목에 orphaned가 남는다."""
+    def test_기록이_진행_중인_고아_세션은_명령을_대기열에_넣고_helper에_넘긴다(self):
+        """고아 세션이어도 호스트 기록이 진행 중이면 같은 검사를 거쳐 명령을 대기열에 넣고 deferred로 넘기며 helper 항목에 orphaned가 남는다."""
         # Given
         self.session(CLAUDE, "claude", RUNNING_TURN, digest="old", age=0)
         fake = FakeOrca([orphan(CLAUDE, "claude")], on_send=self.simulate)
@@ -173,8 +173,9 @@ class OrphanedRefreshTest(OrphanCase):
         result, spawned = self.apply(fake)
 
         # Then
-        self.assertEqual([], fake.sent)
-        self.assertEqual(("deferred", True), (result["sessions"][0]["status"], result["sessions"][0]["orphaned"]))
+        self.assertEqual([(CLAUDE, "/reload-plugins"), (CLAUDE, "/compact")], fake.sent)
+        self.assertEqual(("deferred", True, "commands_queued"),
+                         (result["sessions"][0]["status"], result["sessions"][0]["orphaned"], result["sessions"][0]["detail"]))
         self.assertEqual(1, len(spawned))
         self.assertTrue(refresh.load_run(self.run_id)["follow_up"][0]["orphaned"])
 

@@ -10,19 +10,17 @@ from typing import Callable, Sequence
 from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError, parse_time
 from refresh_codex_session import replaced_before_start
 from refresh_dialog import answer_compact_dialog, dialog_open
-from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, record_state
+from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, background_pending, record_state
 from refresh_orca import Orca
+from refresh_outcome import (
+    CLAUDE_COMPACT_ERROR, CLAUDE_COMPACTED, CLAUDE_NOTHING_TO_COMPACT, CODEX_COMPACTED, RELOAD_DONE, RELOAD_REFUSED, last_item_is,
+    result_counts, transcript_outcome, transcript_records, transcript_size,
+)
 from refresh_process import session_process_present, session_release
-from refresh_reload import judge_reload, local_text, reload_report, screen_report
+from refresh_reload import judge_reload, reload_may_need_force, screen_report
 from refresh_screen import composer_bounds, input_state, codex_fresh, screen_host
 
 
-RELOAD_DONE = re.compile(r"Reloaded: \d+ plugins?")
-RELOAD_REFUSED = re.compile(r"reload changes MCP tools|/reload-plugins --force", re.IGNORECASE)
-CLAUDE_COMPACTED = re.compile(r"Compacted|Conversation compacted")
-CODEX_COMPACTED = re.compile(r"Context compacted")
-CLAUDE_NOTHING_TO_COMPACT = re.compile(r"Not enough messages to compact")
-CLAUDE_COMPACT_ERROR = re.compile(r"Error during compaction|Compaction canceled")
 COMMANDS = {"reload": "/reload-plugins", "compact": "/compact", "clear": "/clear"}
 CLEAR_TIMEOUT = 60.0
 PROBE_KEY = "x"
@@ -95,17 +93,20 @@ def read_marker(handle: str) -> dict | None:
 
 
 def host_record(entry: dict, actions: list[str] | None = None) -> str | None:
-    """`idle` or `busy` from the host's own turn record named by the session marker; None when it cannot decide.
+    """`idle`, `busy`, or `owing` from the host's own turn record named by the session marker; None when it cannot decide.
 
-    A Claude Code turn that ended while a background task, subagent, or wakeup still owes a notification counts as `idle`
-    only when `actions` (default: the entry's remaining ones) is just the reload, which keeps the process and its tasks;
-    any other action, or none, leaves it undecided.
+    A Claude Code turn that ended while a background task, subagent, or wakeup still owes a notification is judged by the
+    next of `actions` (default: the entry's remaining ones). A reload keeps the process and its tasks, so it counts as `idle`;
+    a compaction or clear is `owing`, which Orca's idle signal never overrides, unless the entry carries the user's
+    `compact_while_owing` answer for a compaction; with no action it is undecided.
     """
     verdict = record_state(entry["host"], (read_marker(entry["handle"]) or {}).get("transcript_path"), detailed=True)
     if verdict != "owing":
         return verdict
     remaining = entry.get("actions") if actions is None else actions
-    return "idle" if entry["host"] == "claude" and remaining == ["reload"] else None
+    if entry["host"] != "claude" or not remaining:
+        return None
+    return "idle" if remaining[0] == "reload" or (remaining[0] == "compact" and entry.get("compact_while_owing")) else "owing"
 
 
 def compact_reason(host: str, marker: dict | None, target: dict, mode: str) -> str | None:
@@ -265,7 +266,9 @@ def unsent_input(entry: dict, draft: object, lines: list[str]) -> tuple[str, lis
     return "unsent_input", lines
 
 
-def input_ready(orca: Orca, entry: dict) -> tuple[str | None, list[str]]:
+def input_ready(orca: Orca, entry: dict, known_text: bool = False) -> tuple[str | None, list[str]]:
+    """`known_text` lets a paste or image placeholder on the line count as typed text without the probe character, which a
+    session that is about to be asked about its input must not receive."""
     if orca.mail_pending(entry["handle"]):
         return "orchestration_mail_pending", []
     lines, draft = orca.screen(entry["handle"])
@@ -278,6 +281,9 @@ def input_ready(orca: Orca, entry: dict) -> tuple[str | None, list[str]]:
         state = input_state(entry["host"], lines)
         return (None if state == "empty" else (unsent_input(entry, None, lines)[0] if state == "text" else "input_unknown")), lines
     if entry["host"] != "claude" or entry.get("typed_draft") == draft:
+        return unsent_input(entry, draft, lines)
+    if (known_text or entry.get("keep_unrestorable_input")) and UNRESTORABLE_INPUT.search(draft):
+        entry["typed_draft"] = draft
         return unsent_input(entry, draft, lines)
     seen = entry.get("draft_seen")
     if not seen or seen[0] != draft:
@@ -313,6 +319,9 @@ def ready(orca: Orca, entry: dict, live: dict[str, dict]) -> tuple[str | None, l
     if terminal.get("connected") is not True or terminal.get("writable") is not True:
         return ("terminal_orphaned" if terminal.get("orphaned") is True else "terminal_unavailable"), []
     record = host_record(entry)
+    entry["turn_record"] = record
+    if record == "owing":
+        return "background_task", []
     if record == "busy" or (record is None and not orca.idle(entry["handle"])):
         return "busy", []
     reason, lines = input_ready(orca, entry)
@@ -504,63 +513,6 @@ def release_held(orca: Orca, entry: dict) -> bool:
     return True
 
 
-def result_counts(lines: Sequence[str]) -> dict[str, int]:
-    """Count result lines on screen; agent TUIs repaint, so a new result shows up as a higher count."""
-    patterns = {
-        "reloaded": RELOAD_DONE,
-        "refused": RELOAD_REFUSED,
-        "claude_compacted": CLAUDE_COMPACTED,
-        "codex_compacted": CODEX_COMPACTED,
-        "nothing_to_compact": CLAUDE_NOTHING_TO_COMPACT,
-    }
-    return {name: sum(1 for line in lines if pattern.search(line)) for name, pattern in patterns.items()}
-
-
-def transcript_size(path: object) -> int:
-    try:
-        return Path(str(path)).stat().st_size if isinstance(path, str) else 0
-    except OSError:
-        return 0
-
-
-def transcript_records(path: object, offset: int) -> list[dict]:
-    """Return every complete JSON record appended to a host transcript after byte `offset`."""
-    if not isinstance(path, str) or not Path(path).is_file():
-        return []
-    with open(path, "rb") as stream:
-        size = stream.seek(0, os.SEEK_END)
-        stream.seek(offset if 0 <= offset <= size else 0)
-        chunk = stream.read()
-    complete = chunk[: chunk.rfind(b"\n") + 1]
-    records = []
-    for line in complete.decode("utf-8", errors="replace").splitlines():
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(record, dict):
-            records.append(record)
-    return records
-
-
-def transcript_outcome(host: str, action: str, records: list[dict], entry: dict | None = None) -> str | None:
-    for index, record in enumerate(records):
-        content = str(record.get("content") or "") if record.get("subtype") == "local_command" else ""
-        if host == "claude" and action == "reload" and content:
-            if RELOAD_REFUSED.search(content):
-                return "failed:reload_needs_force"
-            if RELOAD_DONE.search(content):
-                return judge_reload(entry, reload_report(local_text(records[index:])))
-        if host == "claude" and action == "compact" and content:
-            if CLAUDE_NOTHING_TO_COMPACT.search(content):
-                return "nothing_to_compact"
-            if CLAUDE_COMPACT_ERROR.search(content):
-                return "failed:compact_error"
-        if host == "codex" and action == "compact" and record.get("type") == "compacted":
-            return "done"
-    return None
-
-
 def claude_has_prompts(path: object) -> bool:
     """True unless the transcript proves the user never sent a prompt, so /clear cannot lose a conversation."""
     if not isinstance(path, str) or not Path(path).is_file():
@@ -581,16 +533,6 @@ def claude_has_prompts(path: object) -> bool:
         elif isinstance(content, list) and any(isinstance(part, dict) and part.get("type") == "text" for part in content):
             return True
     return False
-
-
-def last_item_is(lines: Sequence[str], echo: str, result: re.Pattern) -> bool:
-    """True when the newest conversation item above the Claude Code composer is `echo` followed by `result`."""
-    bounds = composer_bounds(lines)
-    if bounds is None:
-        return False
-    above = lines[:bounds[0]]
-    echoes = [index for index, line in enumerate(above) if line.strip().startswith("❯")]
-    return bool(echoes) and above[echoes[-1]].strip() == f"❯ {echo}" and any(result.search(line) for line in above[echoes[-1] + 1:])
 
 
 def newer_marker(entry: dict, marker: dict | None, target: dict) -> bool:
@@ -664,6 +606,61 @@ def compaction_refused(entry: dict) -> None:
     entry.update(status="done", detail="applied", actions=[], note="instructions_on_next_compaction")
 
 
+def ask(entry: dict, reason: str) -> None:
+    """End the entry's pass without typing: the user decides whether applying now could disturb the session."""
+    path = (read_marker(entry["handle"]) or {}).get("transcript_path")
+    entry.pop("turn_unreadable", None)
+    entry.update(status="awaiting_answer", detail=reason, ask=reason, background=background_pending(path))
+
+
+def queue_mode(entry: dict) -> bool:
+    return bool(entry.get("queueable")) and entry["host"] == "claude" and "clear" not in entry["actions"]
+
+
+def queue_gate(orca: Orca, entry: dict, target: dict) -> tuple[str | None, list[str]]:
+    """The checks before commands are typed into a Claude Code session whose turn is in progress: a reason to wait or,
+    after the entry became `awaiting_answer`, `awaiting_answer`; None or `unsent_input` when the commands can be queued."""
+    if entry.get("turn_record") != "busy":
+        entry["turn_unreadable"] = True
+        return "busy", []
+    entry.pop("turn_unreadable", None)
+    if "reload" in entry["actions"] and reload_may_need_force(target, read_marker(entry["handle"])):
+        ask(entry, "reload_needs_force")
+        return "awaiting_answer", []
+    reason, lines = input_ready(orca, entry, known_text=True)
+    if reason == "orchestration_mail_pending":
+        ask(entry, reason)
+    elif reason == "input_unknown":
+        ask(entry, "dialog_open" if dialog_open(lines) else "state_unreadable")
+    elif reason == "unsent_input" and not entry.get("input_restorable"):
+        ask(entry, "input_not_restorable")
+    else:
+        return reason, lines
+    return "awaiting_answer", lines
+
+
+def send_queued(orca: Orca, entry: dict, marker: dict | None) -> None:
+    """Type each action's command into a session whose turn is in progress, where Claude Code queues it, then give any
+    held input back at once. The entry waits for the helper to confirm the commands from the transcript."""
+    entry["queue_transcript"] = (marker or {}).get("transcript_path")
+    entry["queue_offset"] = transcript_size(entry["queue_transcript"])
+    entry["queued_at"] = time.time()
+    entry["queued"] = []
+    for action in entry["actions"]:
+        orca.send(entry["handle"], COMMANDS[action])
+        entry["queued"].append(action)
+    entry.update(status="deferred", detail="commands_queued")
+    release_held(orca, entry)
+
+
+def expire_entry(entry: dict, status: str) -> None:
+    """End a pending entry at the deadline: a busy session whose turn state stayed unreadable is asked about, any other is `status`."""
+    if entry.get("queueable") and entry.get("turn_unreadable"):
+        ask(entry, "state_unreadable")
+    else:
+        entry.update(status=status, detail=entry.get("detail") or "deadline_reached")
+
+
 def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     if entry["status"] == "sent":
         outcome = verify(orca, entry, target)
@@ -681,6 +678,11 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     if entry["status"] != "pending" or not entry["actions"]:
         return
     reason, lines = ready(orca, entry, live)
+    queue = reason == "busy" and queue_mode(entry)
+    if queue:
+        reason, lines = queue_gate(orca, entry, target)
+        if reason == "awaiting_answer":
+            return
     entry["detail"] = reason
     if reason in ("terminal_gone", "terminal_orphaned"):
         entry.update(status="skipped", actions=[])
@@ -698,6 +700,9 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
     cleared = reason == "unsent_input" and not typed
     if cleared and entry.get("input_held"):
         entry.update(status="skipped", detail="input_changed", actions=[])
+        return
+    if cleared and entry.get("keep_unrestorable_input"):
+        entry["detail"] = "input_not_restorable"
         return
     if reason and not (typed or cleared):
         return
@@ -728,7 +733,13 @@ def step(orca: Orca, entry: dict, target: dict, live: dict[str, dict]) -> None:
             return
         lines = orca.screen(entry["handle"])[0]
     record = host_record(entry)
-    if record == "busy" or (record is None and not orca.idle(entry["handle"])):
+    if queue:
+        if record != "busy":
+            entry["detail"] = "busy"
+            return
+        send_queued(orca, entry, marker)
+        return
+    if record in ("busy", "owing") or (record is None and not orca.idle(entry["handle"])):
         entry["detail"] = "turn_started"
         return
     entry["before"] = result_counts(lines)
@@ -751,7 +762,7 @@ def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep:
         if time.time() >= deadline:
             for entry in sessions:
                 if entry["status"] == "pending":
-                    entry.update(status=expire, detail=entry.get("detail") or "deadline_reached")
+                    expire_entry(entry, expire)
         active = [entry for entry in sessions if entry["status"] in OPEN_STATUSES or entry.get("input_held")]
         if not active:
             return
@@ -766,7 +777,7 @@ def drive(orca: Orca, sessions: list[dict], state: dict, deadline: float, sleep:
                 entry["detail"] = "terminal_list_unavailable"
                 continue
             if entry["status"] == "pending" and time.time() >= deadline:
-                entry.update(status=expire, detail=entry.get("detail") or "deadline_reached")
+                expire_entry(entry, expire)
                 continue
             try:
                 step(orca, entry, state["hosts"][entry["host"]], live)

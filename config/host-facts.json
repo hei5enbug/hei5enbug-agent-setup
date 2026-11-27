@@ -684,6 +684,117 @@
           "contains": "On Codex, `onFailure` has no effect"
         }
       ]
+    },
+    {
+      "id": "claude-queues-commands-during-turn",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Claude Code queues a slash command typed while a turn runs and runs queued commands one at a time after the turn ends.",
+      "doc_url": "https://code.claude.com/docs/en/commands.md",
+      "quote": "If you send a command while Claude is responding, Claude Code queues it and runs it after the current turn finishes. (interactive-mode.md: \"Commands and shell commands: Claude Code holds them until the turn ends, then runs them one at a time\")",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "skills/orca-plugin-refresh/references/busy-sessions.md",
+          "contains": "Claude Code queues a command typed during a turn and runs it after the turn ends, one at a time."
+        }
+      ]
+    },
+    {
+      "id": "claude-esc-declines-permission-prompt",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "In Claude Code, Esc on an open permission prompt declines the action, and Esc during a turn sends queued input right away.",
+      "doc_url": "https://code.claude.com/docs/en/interactive-mode.md",
+      "quote": "On a permission prompt, `Esc` declines the action, the same as **No** without a comment. ... Press `Esc` to interrupt the turn without submitting your draft. Claude Code keeps what you queued and sends it right away.",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "skills/orca-plugin-refresh/references/busy-sessions.md",
+          "contains": "the Esc declines the open prompt"
+        }
+      ]
+    },
+    {
+      "id": "claude-reload-plugins-force-mcp",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Claude Code's `/reload-plugins` warns and skips when the reload would change the loaded MCP tools, unless `--force` is passed.",
+      "doc_url": "https://code.claude.com/docs/en/commands.md",
+      "quote": "When the reload would change which MCP tools are loaded and invalidate the prompt cache, the command warns and skips unless you pass `--force`.",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "skills/orca-plugin-refresh/references/busy-sessions.md",
+          "contains": "A reload that Claude Code answers with"
+        }
+      ]
+    },
+    {
+      "id": "claude-plugin-mcp-declaration",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "A Claude Code plugin declares MCP servers in `.mcp.json` or through `mcpServers` in `plugin.json`.",
+      "doc_url": "https://code.claude.com/docs/en/plugins-reference.md",
+      "quote": "each MCP server entry the plugin declares in `.mcp.json`, in a `.json` file that `mcpServers` names, or inline in `plugin.json`",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "skills/orca-plugin-refresh/references/busy-sessions.md",
+          "contains": "declares MCP servers (a `.mcp.json` at its root or"
+        }
+      ]
+    },
+    {
+      "id": "claude-background-work-and-exit",
+      "host": "claude",
+      "kind": "host-fact",
+      "statement": "Background commands and subagents keep running through a compaction, but Claude Code ends background tasks when it exits and a resume does not restore background Bash and monitor tasks.",
+      "doc_url": "https://code.claude.com/docs/en/context-window.md",
+      "quote": "Background commands and background subagents: Keep running. (interactive-mode.md: \"Background tasks are automatically cleaned up when Claude Code exits.\"; sessions.md: \"Background Bash and monitor tasks aren't restored.\")",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "skills/orca-plugin-refresh/references/busy-sessions.md",
+          "contains": "because exiting would end the background work."
+        }
+      ]
+    },
+    {
+      "id": "codex-annotated-tag-ref-reinstalls",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Codex 0.172.0 reinstalls a Git marketplace plugin at every start while the marketplace `ref` is an annotated tag name, and stops after one install when `ref` is the tag's peeled commit or a lightweight tag; a rewritten install gets a new hook content hash, which resets hook trust.",
+      "doc_url": "local evidence: isolated CODEX_HOME experiment with codex app-server restarts and a real run on Codex CLI 0.172.0",
+      "quote": "ref=annotated tag name: 24 changed cache entries on starts 1, 2, 3; ref=peeled commit SHA: 24, 0, 0; ref=lightweight tag: 24, 0, 0. Real run: after repinning to the commit, the install folder inode stayed unchanged across codex exec and app-server starts and hooks/list reported 21/21 trusted. Codex hooks page: \"Codex records trust against the hook's current hash.\"",
+      "min_version": "0.172.0",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "A marketplace whose `ref` is an annotated tag name makes Codex reinstall the plugin at every start"
+        },
+        {
+          "file": "skills/orca-plugin-refresh/references/codex-releases.md",
+          "contains": "because Codex reinstalls a marketplace pinned to an annotated"
+        }
+      ]
+    },
+    {
+      "id": "codex-auto-update-false-keeps-reinstalls",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "On Codex 0.172.0, `auto_update = false` on a marketplace entry does not stop the reinstall at start.",
+      "doc_url": "local evidence: isolated CODEX_HOME experiment with codex app-server restarts on Codex CLI 0.172.0",
+      "quote": "After config/value/write marketplaces.demo.auto_update = false, two further app-server starts each still rewrote the plugin cache (30 changed snapshot lines each), the same as with the setting unset. The Codex documentation states no default or effect for auto_update.",
+      "min_version": "0.172.0",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "Setting `auto_update = false` on the marketplace entry does not stop the reinstalls on Codex 0.172.0"
+        }
+      ]
     }
   ]
 }

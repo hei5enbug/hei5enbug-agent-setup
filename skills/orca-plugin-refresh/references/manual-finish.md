@@ -2,16 +2,17 @@
 
 Use this only for a session whose result is `skipped` or `failed` because the script judged it wrongly, for example
 `not_a_claude_session` on a terminal that plainly runs Claude Code. Do it only with the user's approval for that
-session in the current request, and never for a `blocked` or `deferred` session.
+session in the current request, and never for a `blocked`, `deferred`, or `awaiting_answer` session; the user's answer to
+an `awaiting_answer` session's question goes through `decide`.
 
 ## Checks before any command
 
 Run every check that the script runs. If one fails, send nothing and tell the user which check failed.
 
 1. The turn record is idle: the transcript named by the session marker ends its newest turn, and no background task,
-   subagent, or scheduled wakeup owes a notification. For a session that needs only `/reload-plugins`, such an owed
-   notification does not fail this check, because the reload keeps the process and its tasks; it still fails when
-   `/compact` or `/clear` is to be sent or the session is to be resumed.
+   subagent, or scheduled wakeup owes a notification. While a notification is owed, only `/reload-plugins` may be
+   sent, because the reload keeps the process and its tasks; this check fails for `/compact`, `/clear`, or a resume
+   until a turn ends with nothing owed.
 2. The screen shows no open question or approval prompt.
 3. The input line holds nothing typed. A grey suggestion counts as empty: type `x` once and delete it with one
    backspace only when the draft shows exactly that `x`; typed text extends instead of being replaced. Never delete

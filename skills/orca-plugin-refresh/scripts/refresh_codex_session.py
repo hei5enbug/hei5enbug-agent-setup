@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 from pathlib import Path
+from typing import Mapping
 
-from refresh_core import RefreshError
+from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError
+from refresh_install import CODEX_TURN_ENV
 from refresh_process import ProcessOs, find_session_process
 
 THREAD_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
@@ -86,3 +89,63 @@ def resume_line(executable: str, config_dir: str | None, arguments: list[str], t
     prefix = [f"CODEX_HOME={shlex.quote(config_dir)}"] if config_dir else []
     return " ".join([*prefix, shlex.quote(executable), "resume", shlex.quote(thread_id),
                      *(shlex.quote(item) for item in arguments)])
+
+
+ROLLOUT_META_BYTES = 1024 * 1024
+
+
+def rollout_cwd(path: str) -> str | None:
+    """The working folder in a rollout's first record; no prompt text is read."""
+    try:
+        with Path(path).open("rb") as stream:
+            record = json.loads(stream.readline(ROLLOUT_META_BYTES))
+    except (OSError, ValueError):
+        return None
+    payload = record.get("payload") if isinstance(record, dict) else None
+    cwd = payload.get("cwd") if isinstance(payload, dict) else None
+    return cwd if isinstance(cwd, str) else None
+
+
+def marker_handles() -> dict[str, str]:
+    """Each Codex session marker's rollout path mapped to the Orca terminal handle that wrote it."""
+    directory = SESSION_CONTEXT.marker_directory()
+    found: dict[str, str] = {}
+    if directory is None:
+        return found
+    try:
+        files = sorted(directory.glob("*.json"))
+    except OSError:
+        return found
+    for file in files:
+        try:
+            marker = json.loads(file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        path = marker.get("transcript_path") if isinstance(marker, dict) else None
+        if isinstance(marker, dict) and marker.get("host") == "codex" and isinstance(path, str) and HANDLE.fullmatch(file.stem):
+            found[path] = file.stem
+    return found
+
+
+def gate_sessions(error: RefreshError, environ: Mapping[str, str] = os.environ) -> list[dict]:
+    """The Codex sessions an install gate names, one per busy rollout, matched to an Orca terminal through the Codex
+    markers' transcript paths. A rollout no marker names is `outside_orca`. The session running the command, when the
+    gate is `update_deferred_active_session`, comes first and is marked `own`."""
+    rollouts = [path for path in error.details.get("rollouts", []) if isinstance(path, str)]
+    markers = marker_handles()
+    sessions: list[dict] = []
+    own_rollout = None
+    if error.code == "update_deferred_active_session":
+        handle = environ.get("ORCA_TERMINAL_HANDLE")
+        handle = handle if isinstance(handle, str) and HANDLE.fullmatch(handle) else None
+        thread = next((environ[name] for name in CODEX_TURN_ENV if environ.get(name)), None)
+        own_rollout = next((path for path in rollouts if thread and Path(path).name.endswith(f"-{thread}.jsonl")), None)
+        own_rollout = own_rollout or next((path for path, owner in markers.items() if handle and owner == handle), None)
+        sessions.append({"rollout": own_rollout, "handle": handle, "outside_orca": handle is None, "own": True,
+                         "worktree": rollout_cwd(own_rollout) if own_rollout else None})
+    for path in rollouts:
+        if path == own_rollout:
+            continue
+        handle = markers.get(path)
+        sessions.append({"rollout": path, "handle": handle, "outside_orca": handle is None, "own": False, "worktree": rollout_cwd(path)})
+    return sessions

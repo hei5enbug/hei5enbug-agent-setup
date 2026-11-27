@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import Callable
 
 from refresh_core import RUN_STATE_WAIT_SECONDS, RefreshError, exclusive, load_run, now, run_path, save_json
 
@@ -40,11 +41,12 @@ class RunFeed:
         except RefreshError:
             return []
 
-    def close(self) -> list[dict]:
-        """Take any entry that joined since the last read; only when none did, mark the helper finished in the same locked step."""
+    def close(self, hold: Callable[[dict], bool] | None = None) -> list[dict]:
+        """Take any entry that joined since the last read; only when none did and `hold` does not keep the helper alive for
+        work the run state still holds, mark the helper finished in the same locked step."""
         with exclusive("run-state", wait_seconds=RUN_STATE_WAIT_SECONDS):
             state = load_run(self.run_id)
             found = self.fresh(state)
-            if not found:
+            if not found and not (hold and hold(state)):
                 save_json(run_path(self.run_id), {**state, "helper_finished_at": now()})
             return found

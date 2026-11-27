@@ -7,8 +7,10 @@
 name: orca-plugin-refresh
 description: >-
   Claude Code와 Codex에서 hei5enbug-agent-setup과 사용자가 지정한 플러그인을 업데이트한 뒤, 설치된 버전을
-  실행 중인 Orca 에이전트 세션에 적용한다. 유휴 세션은 reload하거나 compact하고, 오래된 Claude Code 릴리스의
-  세션은 재개하고, 불러온 플러그인 폴더가 교체된 Codex 세션의 재개를 제안한다. 스킬 이름이 없어도 실행 중인 Orca 세션을 더 새로운 Claude Code 릴리스로 새로고침하거나
+  실행 중인 Orca 에이전트 세션에 적용한다. 유휴 세션은 reload하거나 compact하고, 바쁜 Claude Code 세션에는
+  명령을 대기열에 넣고 작업을 방해할 수 있는 경우 사용자에게 묻는다. 오래된 Claude Code 릴리스나 교체된
+  Codex 플러그인 폴더를 쓰는 세션은 재개하고, Codex 업데이트를 막는 바쁜 Codex 세션은 사용자에게 묻는다.
+  스킬 이름이 없어도 실행 중인 Orca 세션을 더 새로운 Claude Code 릴리스로 새로고침하거나
   재시작해 달라는 요청, 또는 설치된 업데이트를 세션에 적용해 달라는 요청에 사용한다. 설치가 이미 끝났으면
   apply-installed를 사용한다. 작업 트리 생성, 터미널 읽기, Orca 브라우저 작업에는 사용하지 않는다.
 compatibility: >-
@@ -21,13 +23,13 @@ compatibility: >-
 
 이 스킬은 `hei5enbug-agent-setup`과 사용자가 고른 다른 플러그인을 업데이트한 뒤, 설치된 버전을 실행 중인
 Orca 세션에 세션을 끝내지 않고 적용한다. 세션을 재시작하거나 대화를 교체하지 않는다. 다만 `apply`는 모든
-재개 확인을 통과한 오래된 릴리스의 Claude Code 세션을 먼저 묻지 않고 재개한다(3단계). 플러그인 폴더가 교체된 Codex 세션은 승인을 받아 재개할 수 있다(6단계).
+재개 확인을 통과한 오래된 릴리스의 Claude Code 세션이나 플러그인 폴더가 교체된 유휴 Codex 세션을 먼저 묻지 않고 재개한다(3단계). 확인에 막힌 세션은 사용자가 승인할 수 있다(6단계).
 
 ## 업데이트가 실행 중인 세션에 반영되는 방법
 
 | 구분 | Claude Code | Codex |
 |---|---|---|
-| 스킬, 에이전트, 훅 | `/reload-plugins`가 모든 플러그인을 다시 불러온다 | 플러그인 폴더가 교체된 세션은 승인을 받아 재개해야 한다 |
+| 스킬, 에이전트, 훅 | `/reload-plugins`가 모든 플러그인을 다시 불러온다 | 플러그인 폴더가 교체된 세션은 재개한다 |
 | 세션 지침 | `/compact` | `/compact`; 다음 턴에서 지침을 불러온다 |
 
 플러그인의 세션 시작 훅은 Orca 터미널마다 호스트, 플러그인 디렉터리, 대화 기록 경로, 실행 지침의 digest가
@@ -47,6 +49,7 @@ compact할 수 없다고 답하고 대화 기록에 프롬프트가 없으면 �
 `<script>`는 이 `SKILL.md`가 있는 디렉터리의 `scripts/orca_plugin_refresh.py`다.
 
 Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 전에 `references/codex-releases.md`를 읽는다.
+스크립트가 `questions`에 반환한 질문을 묻거나 `decide`를 실행하기 전에 `references/busy-sessions.md`를 읽는다.
 
 1. **설치 경로를 고른다.** 새 버전을 설치하려면 `python3 <script> refresh --json`을 한 번 실행한다. 이 명령은
    업데이트를 하고, 반환된 run id로 3단계의 `apply`와 7단계의 `orphans`를 이어 실행해 `update`, `apply`, `orphans` 절이 있는
@@ -80,9 +83,9 @@ Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 �
    디렉터리를 유지하므로 언제든 설치한다. Codex 업데이트는 옛 설치본을 삭제하므로, 호출자가 Codex 턴 안에
    있으면 `update_deferred_active_session`, 최근 30분 안의 Codex 세션이 턴을 끝내지 않았으면
    `codex_turn_in_progress`, Codex 세션을 읽을 수 없으면 `update_deferred_unknown_session_state`로
-   보류한다. 보류된 Codex 호스트는 `root`와 `recovery_command`(해석된 함께 새로고침할 플러그인을 `--also`로 다시
-   붙인다)와 함께 보고하고, Codex 턴이 끝난 뒤 `update`를 다시 실행하라고 사용자에게 알린다. 스스로 다시 시도하지
-   않는다. 게이트는 Codex 설치 직전마다 다시 확인하므로 실행 도중 시작된 턴은 그 플러그인과 이후의 모든 Codex 설치를
+   보류한다. 보류된 Codex 호스트는 `root`와 함께 보고한다. 처음 두 코드는 `questions`에 바쁜 세션마다
+   `codex_install` 질문이 하나씩 있다. 3단계처럼 질문한 뒤 `decide`를 실행하면 턴이 끝난 뒤 재실행 없이 설치한다.
+   세 번째 코드는 `recovery_command`를 알려 주고 `update`를 다시 실행하라고 알린다. 스스로 다시 시도하지 않는다. 게이트는 Codex 설치 직전마다 다시 확인하므로 실행 도중 시작된 턴은 그 플러그인과 이후의 모든 Codex 설치를
    보류하고, 막힌 플러그인은 `deferred`가 되며 Claude Code는 영향받지 않는다. 이후 명령은 반환된 `script` 경로로 실행한다. Codex
    업데이트가 이 스킬을 불러온 설치 디렉터리를 삭제할 수 있기 때문이다. 모든 경고를 보고한다.
    - `unreleased_same_version`: 버전이 바뀌지 않아 Claude Code가 설치본을 유지한다. 이 파일이 Claude Code에
@@ -93,13 +96,14 @@ Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 �
 3. **세션에 적용한다.** 이 플러그인의 호스트 업데이트가 성공했거나 설치본만 적용한 실행이 그 호스트를 오류 없이
    반환하면 `refresh`가 1단계의 셸 제한 시간 안에서 포그라운드로 `apply`를 직접 실행하고, 결과는 `apply` 절에 담긴다.
    모든 호스트에 오류가 있으면 출력에는 `update`만 있다. 이 단계는 사용자에게 확인을 묻지 않는다. 어떤 세션에 명령을 보낼지는 스크립트의 확인이 정한다.
-   스크립트는 약 20초 동안 한가하고 입력 줄이 비어 있거나 입력한 글을 지운 세션에만
-   명령을 보내고, 이미 보낸 명령의 결과를 계속 확인하며 정확히 되돌릴 수 있는 글은 되돌린다. 아직 바쁘거나 준비되지 않은 세션은
-   기다리지 않고 분리된 도우미 하나에 `deferred`로 넘긴다.
+   스크립트는 약 20초 동안 입력 줄이 비어 있거나 입력한 글을 지운 유휴 세션에 명령을 보내거나, 바쁜 Claude Code
+   세션에 명령을 대기열로 입력한다. 이미 보낸 명령의 결과를 계속 확인하며 정확히 되돌릴 수 있는 글은 되돌린다.
+   아직 바쁘거나 준비되지 않은 세션은 기다리지 않고 분리된 도우미 하나에 `deferred`로 넘긴다. 출력에 `questions`가
+   있으면 스크립트가 반환하자마자 다른 보고보다 먼저 질문 도구로 각각 묻고 `decide`를 실행한다.
    `already_running` 오류는 다른 실행이 지금 명령을 보내고 있다는 뜻이다. 끝날 때까지 기다린 뒤 `apply`를
    다시 실행한다. 업데이트에 실패한 호스트는 계속 차단하고, 성공한 호스트는 진행할 수 있다.
-   `apply`는 무엇이든 보내기 전에 `host_release_outdated`를 보고하고 모든 재개 확인을 통과한 다른 Claude Code
-   세션을 각각 재개한다. 재개한 세션에는 `/reload-plugins`를 보내지 않고, 이후 `/compact`는 지침이 오래됐을 때만
+   `apply`는 무엇이든 보내기 전에 `host_release_outdated`를 보고하는 다른 Claude Code 세션과 플러그인 폴더가
+   교체된 다른 Codex 세션 중 모든 재개 확인을 통과한 세션을 각각 재개한다. 바쁜 Codex 세션은 턴이 끝난 뒤 도우미가 재개한다. 재개한 세션에는 `/reload-plugins`를 보내지 않고, 이후 `/compact`는 지침이 오래됐을 때만
    보낸다. `apply`가 재개했거나 재개를 시도한 세션을 보고하기 전에 `references/resume.md`를 읽는다.
 4. **모든 세션 결과를 보고한다.** 터미널 접미사, 호스트, 작업 트리, 상태, 완료한 작업, 세부 내용을 표시한다.
    - `done`: 필요한 작업이 모두 확인됐다. `already_current`는 할 일이 없었다는 뜻이다.
@@ -114,7 +118,7 @@ Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 �
      뜻이며, 새로고침한 고아 세션은 `orphaned`를 보고한다. `input_clear_failed`는 입력 줄을 지우지 못해 아무것도 보내지 않았거나
      (`input`이 `clear_failed`), 스크립트가 글을 다시 입력했다는 뜻이다. `orchestration_mail_pending`은 Orca가
      그 세션 앞으로 읽지 않은 오케스트레이션 메일을 아직 갖고 있었거나 그 여부를 알 수 없어서, 아무것도 입력하거나 보내지
-     않았다는 뜻이다.
+     않았다는 뜻이다. `queued_unconfirmed`는 대기열의 명령이 한 시간 안에 확인되지 않았으며 여전히 실행될 수 있다는 뜻이다.
    - 모든 세션은 `ready_signal`(전송을 허용한 신호인 `host_record` 또는 `tui_idle`)도 보고하고, 입력을 붙들었다면
      `input`(`restored`, 정확히 되돌릴 수 없는 입력이면 `cleared`)도 보고한다.
      Claude Code 세션은 `release`도 보고하며, 설치된 릴리스보다 오래된 릴리스로 실행 중이거나 실행 파일이 없어졌으면 두 버전과
@@ -134,13 +138,15 @@ Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 �
      못했다는 뜻이다. `apply`를 다시 실행한다.
    - `blocked`: 해당 호스트의 플러그인 업데이트가 실패했거나 설치 manifest, 훅 대상, 지침 digest가 검증되지
      않았다.
-   - `deferred`: 세션이 바쁘거나 준비되지 않아 분리된 도우미가 마무리한다. 5단계를 따른다.
+   - `deferred`: 세션이 바쁘거나 준비되지 않아 분리된 도우미가 마무리한다. 5단계를 따른다. `commands_queued`는 명령을 입력했고 턴을 기다린다는 뜻이다.
+   - `awaiting_answer`: 아무것도 입력하지 않았고 세션이 사용자 답변을 기다린다.
    - `queued_after_turn`: 이 스킬이 실행 중인 세션이다. 5단계를 따른다.
 5. **도우미가 마무리하게 한다.** `apply`가 `deferred`나 `queued_after_turn`을 보고하면 첫 결과를 알리고 턴을
    끝낸다. 분리된 도우미 하나가 넘겨받은 모든 세션과 이 세션을 지켜본다. 각 세션 자신의 턴 기록이 먼저
    판단하고, Orca의 한가함 콜백(`orca terminal wait --for tui-idle`)은 그 기록이 판단하지 못할 때만 판단한다.
    세션이 한가해졌다고 알려 오면 도우미는 3초 뒤 다시 확인하고, 설치된 플러그인이 이번 실행과 그대로인지와 세션이 이미 새 지침을 불러왔는지 확인한 뒤에만 남은
-   작업을 보낸다. 입력 줄을 읽을 수 없는 경우처럼 다른 이유로 미뤄진 세션은 확인할 때마다 다시 살핀다. 넘긴 뒤
+   작업을 보낸다. 백그라운드 작업, 서브에이전트, 깨우기가 알림을 남겨야 하는 동안에는 `/reload-plugins`만 보내고
+   `/compact`나 `/clear`는 남은 알림 없이 끝나는 턴을 기다린다. 입력 줄을 읽을 수 없는 경우처럼 다른 이유로 미뤄진 세션은 확인할 때마다 다시 살핀다. 넘긴 뒤
    Claude Code 세션의 reload는 넘긴 뒤 대화 기록에 성공한 reload가 있거나, 넘긴 뒤 표식이 source `startup`이나 `resume`으로
    다시 쓰일 때까지 남는다. compact나 clear가 다시 쓴 표식은 어떤 폴더를 가리켜도 reload를 끝내지 못한다. 설치된 모든
    플러그인을 읽는 것은 새 프로세스뿐이기 때문이다. 한 시간 안에 준비되지 않은 세션에는 보내지 않고 `not_idle_before_deadline`이나 마지막 이유로 남긴다.
@@ -154,8 +160,8 @@ Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 �
    `hosts`의 플러그인 상태와 함께 모든 세션을 보고한다. `not_refreshed`는 업데이트를 받지 못한 세션 목록이다.
    상태의 `self_notification`이 `sent`가 아니면 프롬프트를 전달하지 못한 것이다. 그래도 상태에 작업 결과가
    남아 있다.
-6. **재개를 제안한다.** `resume_approval_needed`를 보고한 세션(`plugin_load_error`, `codex_plugin_folder_replaced` 또는 실패한 확인이 `resume_check`에
-   있는 `host_release_outdated`)을 모두 한 번 보여 주고 사용자가 승인할 세션을 묻는다.
+6. **재개를 제안한다.** `resume_approval_needed`를 보고한 세션(`plugin_load_error`, 또는 실패한 확인이 `resume_check`에 있는 `codex_plugin_folder_replaced`나
+   `host_release_outdated`)을 모두 한 번 보여 주고 사용자가 승인할 세션을 묻는다.
    고치면 그 세션이 끝나고 같은 대화가 다시 열린다.
    `resume`을 실행하기 전에 `references/resume.md`를 읽고, 승인된 터미널에만 실행한다.
 7. **고아 터미널 닫기를 제안한다.** `orphans` 절에서 고아 에이전트 터미널마다
@@ -168,13 +174,13 @@ Codex 플러그인을 업데이트하거나 훅 신뢰 경고를 보고하기 �
 내부 하위 명령이므로 직접 실행하지 않는다. 스크립트가 건너뛴 세션을 마무리하는 경우 외에는 Orca 터미널에 명령을
 직접 보내지 않는다. 수동 마무리는 해당 세션에 대한 사용자 승인을 받고 `references/manual-finish.md`를 먼저 읽어
 그 확인을 통과한 뒤에만 하며, 모든 결과를 `record-manual`로 기록한다. 이 요청에서 사용자가 승인한 세션에
-`resume`을 실행하거나 `apply`가 재개하는 경우, 또는 사용자가 승인한 건너뛴 세션을 `references/manual-finish.md`가
+`resume`을 실행하거나 `apply` 또는 Codex 설치를 시작하는 `decide`가 재개하는 경우, `interrupt` 답변으로 `decide`가 처리하는 경우, 또는 사용자가 승인한 건너뛴 세션을 `references/manual-finish.md`가
 설명하는 대로 직접 마무리하는 경우 외에는 세션을 끝내지 않는다. 이 요청에서 사용자가 승인한 터미널에
 `close`를 실행하는 경우 외에는 터미널을 닫지 않는다. 스스로 `--force`를 전달하지 않는다.
 
-스크립트는 모든 세션이 `done`, `deferred`, `queued_after_turn` 중 하나이거나 업데이트 또는 `apply-installed` 결과가 ok이면
+스크립트는 모든 세션이 `done`, `deferred`, `awaiting_answer`, `queued_after_turn` 중 하나이거나 업데이트 또는 `apply-installed` 결과가 ok이면
 `0`으로 종료한다. 그렇지 않으면, 그리고 사용법 오류에도 `2`로 종료한다. 이 플러그인에 호스트 오류가 있거나
 함께 새로고침할 플러그인 중 하나라도 상태가 `error`이면 업데이트 또는 `apply-installed` 결과는 ok가 아니다. `refresh`는 업데이트 결과가 ok이고
-모든 세션이 `done`, `deferred`, `queued_after_turn` 중 하나일 때만 `0`으로 종료한다.
+모든 세션이 `done`, `deferred`, `awaiting_answer`, `queued_after_turn` 중 하나일 때만 `0`으로 종료한다.
 
 스크립트가 세션을 건너뛰거나 미루거나 실패 처리한 이유를 사용자에게 설명하기 전과 수동으로 마무리하기 전에 `references/safety-and-limits.md`를 읽는다.

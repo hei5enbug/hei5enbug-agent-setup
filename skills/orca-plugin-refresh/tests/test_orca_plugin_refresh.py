@@ -1034,9 +1034,10 @@ class FollowUpTest(DriveTest):
         return run_id
 
     def test_바쁜_세션은_기다리지_않고_도우미_하나에_넘긴다(self):
-        """앞단은 쉬는 세션만 바로 처리하고, 바쁜 세션은 기한을 기다리지 않고 도우미 하나에 넘기며 넘긴 내용을 저장한다."""
+        """앞단은 쉬는 세션만 바로 처리하고, 바쁜 세션은 기한을 기다리지 않고 명령을 대기열에 넣은 채 도우미 하나에 넘기며 넘긴 내용을 저장한다."""
         # Given
         self.write_marker("term_codex", "codex")
+        self.write_marker("term_busy", "claude", transcript=write_records(Path(self.temp.name) / "busy.jsonl", RUNNING_TURN))
         fake = FakeOrca([terminal("term_self", "claude"), terminal("term_busy", "claude"), terminal("term_codex", "codex")],
                         busy={"term_busy": 10**6}, screens={"term_codex": CODEX_EMPTY})
         run_id = self.save_state()
@@ -1048,7 +1049,7 @@ class FollowUpTest(DriveTest):
 
         # Then
         statuses = {item["terminal"]: (item["status"], item.get("detail")) for item in result["sessions"]}
-        self.assertEqual(("deferred", "busy"), statuses["…m_busy"])
+        self.assertEqual(("deferred", "commands_queued"), statuses["…m_busy"])
         self.assertEqual("queued_after_turn", statuses["…m_self"][0])
         self.assertEqual([run_id], spawned)
         self.assertTrue(result["ok"])
@@ -1226,6 +1227,7 @@ class FollowUpTest(DriveTest):
         """다른 세션만 넘길 때는 저장된 시작 세션 계획을 지워, 끝난 시작 세션에 명령을 다시 보내지 않는다."""
         # Given
         self.write_marker("term_self", "claude")
+        self.write_marker("term_busy", "claude", transcript=write_records(Path(self.temp.name) / "busy.jsonl", RUNNING_TURN))
         fake = FakeOrca([terminal("term_self", "claude"), terminal("term_busy", "claude")], busy={"term_busy": 10**6})
         run_id = self.save_state(**{"self": {"handle": "term_self", "host": "claude", "actions": ["reload"], "title": "t", "worktree": "/tmp/work"},
                                     "sessions": {"term_self": {"status": "done"}}})
@@ -1534,7 +1536,7 @@ class FollowUpTest(DriveTest):
         self.assertEqual([], fake.sent)
 
     def test_넘길_때_세션의_기록_크기를_도우미_항목과_시작_세션에_저장한다(self):
-        """apply는 미룬 세션과 시작 세션 모두에 표식의 기록 파일 경로와 그때의 바이트 크기를 저장하고, 기록 파일이 아직 없으면 둘 다 None을 저장한다."""
+        """apply는 대기열에 넣은 세션과 시작 세션 모두에 표식의 기록 파일 경로와 그때의 바이트 크기를 저장하고, 기록이 없어 턴 상태를 못 읽는 세션은 도우미에 넘기지 않고 묻는다."""
         # Given
         busy_file, self_file = Path(self.temp.name) / "busy.jsonl", Path(self.temp.name) / "self.jsonl"
         write_records(busy_file, RUNNING_TURN)
@@ -1548,12 +1550,13 @@ class FollowUpTest(DriveTest):
 
         # When
         with patch.object(refresh, "Orca", return_value=fake):
-            refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: 4242)
+            result = refresh.command_apply(run_id, "never", [], 1, spawn=lambda run: 4242)
 
         # Then
         saved = refresh.load_run(run_id)
         points = {item["handle"]: (item["handoff_transcript"], item["handoff_offset"]) for item in saved["follow_up"]}
-        self.assertEqual({"term_busy": (str(busy_file), busy_file.stat().st_size), "term_new": (None, None)}, points)
+        self.assertEqual({"term_busy": (str(busy_file), busy_file.stat().st_size)}, points)
+        self.assertEqual("awaiting_answer", result["sessions"][2]["status"])
         self.assertEqual((str(self_file), self_file.stat().st_size), (saved["self"]["handoff_transcript"], saved["self"]["handoff_offset"]))
 
     def test_다른_세션이_모두_끝나면_시작_세션을_기다리는_동안에도_다른_세션_종료_시각을_남긴다(self):
@@ -2364,11 +2367,16 @@ class HostRecordFlowTest(unittest.TestCase):
         self.assertEqual(("skipped", "input_clear_failed", "clear_failed"), (sessions[0]["status"], sessions[0]["detail"], sessions[0]["input"]))
 
     def test_지운_뒤_미룬_세션은_도우미가_끝낸_보고에도_cleared로_남는다(self):
-        """입력을 지운 뒤 새 턴이 시작돼 도우미에 넘긴 세션은 도우미가 명령을 보내 끝낸 뒤에도 input이 cleared이다."""
+        """입력을 지운 뒤 새 턴이 시작돼 명령을 대기열에 넣고 도우미에 넘긴 세션은 도우미가 기록으로 확인해 끝낸 뒤에도 input이 cleared이다."""
         # Given
-        self.marker_with("demo-d", FINISHED_TURN)
+        path = self.marker_with("demo-d", FINISHED_TURN)
         fake = self.screen_only_text(delete_clears=True)
         fake.on_keys = lambda orca, name, text: orca.screens.__setitem__(name, list(CLAUDE_EMPTY)) if text == refresh.BACKSPACE else None
+
+        def confirm(orca, name, text):
+            with path.open("a") as stream:
+                stream.write(json.dumps({"type": "system", "subtype": "local_command", "content": "<local-command-stdout>Reloaded: 7 plugins</local-command-stdout>"}) + "\n")
+        fake.on_send = confirm
         phase = {"helper": False, "calls": 0}
 
         def host_record(entry):

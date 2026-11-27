@@ -1,21 +1,24 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import test_orca_plugin_refresh as base
-from test_orca_plugin_refresh import CODEX_EMPTY, FakeOrca, refresh, terminal
+from test_orca_plugin_refresh import CODEX_EMPTY, RUNNING_TURN, FakeOrca, refresh, terminal, write_records
 
 import refresh_core
 import refresh_feed
 
 RUN_ID = "a" * 32
 WAIT_LIMIT = 15.0
+RELOADED = {"type": "system", "subtype": "local_command", "content": "<local-command-stdout>Reloaded: 7 plugins</local-command-stdout>"}
 
 
 def wait_until(check, limit=WAIT_LIMIT):
@@ -96,6 +99,11 @@ class LockScopeTest(unittest.TestCase):
         thread.start()
         return thread
 
+    def running_session(self, handle):
+        path = write_records(Path(self.temp.name) / f"{handle}.jsonl", RUNNING_TURN)
+        self.write_marker(handle, "claude", transcript=path)
+        return path
+
     def deferred_item(self, handle, host="claude", actions=("reload",)):
         return {"handle": handle, "host": host, "actions": list(actions), "detail": "busy", "deferred_at": time.time()}
 
@@ -164,20 +172,26 @@ class LockScopeTest(unittest.TestCase):
         self.assertEqual(1, fake.most_active)
 
     def test_새_apply가_미룬_세션은_이미_도는_도우미에_합류하고_도우미를_새로_시작하지_않는다(self):
-        """도우미가 대기하는 동안 새 apply가 미룬 세션은 실행 기록에 덧붙고 같은 도우미가 이어받아 처리하며, 도우미는 한 번만 시작한다."""
+        """도우미가 대기하는 동안 새 apply가 대기열에 넣은 세션은 실행 기록에 덧붙고 같은 도우미가 이어받아 확인하며, 도우미는 한 번만 시작한다."""
         # Given
         self.spawned: list[str] = []
+        first, second = self.running_session("term_first"), self.running_session("term_second")
+
+        def confirm_second(orca, handle, text):
+            if handle == "term_second":
+                with second.open("a") as stream:
+                    stream.write(json.dumps(RELOADED) + "\n")
+
         fake = AuditedOrca([terminal("term_first", "claude"), terminal("term_second", "claude")],
-                           busy={"term_first": 10**6, "term_second": 10**6}, on_send=self.simulate)
-        fake.never_idle = {"term_first"}
+                           busy={"term_first": 10**6, "term_second": 10**6}, on_send=confirm_second)
         self.save_run()
         with patch.object(refresh, "Orca", return_value=fake):
             refresh.command_apply(RUN_ID, "never", ["term_first"], 1, spawn=self.spawn_helper_thread)
-            self.assertTrue(wait_until(lambda: "term_first" in getattr(fake, "waits", [])))
+            self.assertTrue(wait_until(lambda: any(thread.is_alive() for thread in self.threads)))
 
             # When
             result = refresh.command_apply(RUN_ID, "never", ["term_second"], 1, spawn=self.spawn_helper_thread)
-            joined = wait_until(lambda: ("term_second", "/reload-plugins") in fake.sent)
+            joined = wait_until(lambda: refresh.load_run(RUN_ID)["sessions"]["term_second"]["status"] == "done")
             fake.list = [item for item in fake.list if item["handle"] != "term_first"]
             self.join_helpers()
 
@@ -190,11 +204,13 @@ class LockScopeTest(unittest.TestCase):
         self.assertEqual(["term_first", "term_second"], [item["handle"] for item in saved["follow_up"]])
         self.assertEqual("done", saved["sessions"]["term_second"]["status"])
         self.assertEqual([], fake.unlocked)
+        self.assertTrue(first.is_file())
 
     def test_apply가_길게_도는_사이_도우미가_기록한_세션_결과를_apply가_덮어쓰지_않는다(self):
         """apply가 잠금을 쥐고 오래 도는 동안 도우미가 끝난 세션을 기록해도, apply의 저장이 그 결과를 되돌리지 않고 새 합류분만 더한다."""
         # Given
         fake = FakeOrca([terminal("term_old", "claude"), terminal("term_new", "claude")], busy={"term_new": 10**6})
+        self.running_session("term_new")
         self.save_run(follow_up=[self.deferred_item("term_old")], sessions={"term_old": {"status": "deferred", "terminal": "…m_old"}},
                       helper={"pid": os.getpid(), "started_at": refresh.now()})
         real_drive = refresh.drive

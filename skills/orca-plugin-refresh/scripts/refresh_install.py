@@ -296,37 +296,54 @@ def rollout_idle(path: Path) -> bool:
     return bool(record) and record.get("type") == "event_msg" and isinstance(payload, dict) and payload.get("type") in CODEX_IDLE_EVENTS
 
 
-def install_gate(host: str) -> RefreshError | None:
-    """Why an install on `host` must wait, or None. A Codex update deletes the old install, so no Codex turn may run."""
-    if host != "codex":
-        return None
-    if any(name in os.environ for name in CODEX_TURN_ENV):
-        return RefreshError("update_deferred_active_session", "This command runs inside a Codex turn.")
-    unknown = RefreshError("update_deferred_unknown_session_state", "The Codex session state could not be read.")
+def recent_rollouts() -> list[Path]:
+    """Every Codex rollout file modified within ROLLOUT_RECENT_SECONDS; raises OSError when a folder is unreadable."""
     sessions = codex_home() / "sessions"
     errors: list[OSError] = []
     recent: list[Path] = []
+    if not sessions.exists():
+        return recent
+    for folder, _, names in os.walk(sessions, onerror=errors.append):
+        for name in names:
+            if not (name.startswith("rollout-") and name.endswith(".jsonl")):
+                continue
+            path = Path(folder) / name
+            try:
+                modified = path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            if time.time() - modified <= ROLLOUT_RECENT_SECONDS:
+                recent.append(path)
+    if errors:
+        raise errors[0]
+    return recent
+
+
+def rollout_busy(path: Path) -> bool:
+    """True while a recent rollout file has not recorded the end of its turn."""
     try:
-        if not sessions.exists():
-            return None
-        for folder, _, names in os.walk(sessions, onerror=errors.append):
-            for name in names:
-                if not (name.startswith("rollout-") and name.endswith(".jsonl")):
-                    continue
-                path = Path(folder) / name
-                try:
-                    modified = path.stat().st_mtime
-                except FileNotFoundError:
-                    continue
-                if time.time() - modified <= ROLLOUT_RECENT_SECONDS:
-                    recent.append(path)
-        if errors:
-            return unknown
-        for path in recent:
-            if not rollout_idle(path):
-                return RefreshError("codex_turn_in_progress", "A recent Codex session has a turn in progress.")
+        return time.time() - path.stat().st_mtime <= ROLLOUT_RECENT_SECONDS and not rollout_idle(path)
+    except OSError:
+        return False
+
+
+def install_gate(host: str, ignore_env: bool = False) -> RefreshError | None:
+    """Why an install on `host` must wait, or None. A Codex update deletes the old install, so no Codex turn may run.
+
+    The error's `details["rollouts"]` names every recent rollout that has not ended its turn. `ignore_env` skips the
+    check of the caller's own Codex turn, for the detached helper that inherited the variables of a session that ended."""
+    if host != "codex":
+        return None
+    try:
+        busy = [str(path) for path in recent_rollouts() if not rollout_idle(path)]
     except Exception:
-        return unknown
+        busy = None
+    if not ignore_env and any(name in os.environ for name in CODEX_TURN_ENV):
+        return RefreshError("update_deferred_active_session", "This command runs inside a Codex turn.", {"rollouts": busy or []})
+    if busy is None:
+        return RefreshError("update_deferred_unknown_session_state", "The Codex session state could not be read.")
+    if busy:
+        return RefreshError("codex_turn_in_progress", "A recent Codex session has a turn in progress.", {"rollouts": busy})
     return None
 
 
@@ -340,7 +357,7 @@ def run_install(host: str, plugin_id: str, context: dict) -> RefreshError | None
 
     def blocked() -> RefreshError | None:
         if not context.get("blocked"):
-            context["blocked"] = install_gate(host)
+            context["blocked"] = install_gate(host, ignore_env=True) if context.get("ignore_env") else install_gate(host)
         return context["blocked"]
 
     marketplace = plugin_id.partition("@")[2]

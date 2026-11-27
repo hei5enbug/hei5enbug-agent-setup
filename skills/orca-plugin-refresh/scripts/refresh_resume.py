@@ -247,26 +247,61 @@ def saved_detail(state: dict, handle: str) -> str | None:
     return (state.get("sessions", {}).get(handle) or {}).get("detail")
 
 
+def resume_candidate(entry: dict, state: dict) -> bool:
+    """A session `apply` resumes by itself: another Claude Code session on an older release, and another Codex session
+    whose loaded plugin folder was replaced."""
+    if entry["initiator"] or entry.get("handled"):
+        return False
+    if entry["host"] == "codex":
+        return entry["status"] == "skipped" and entry.get("detail") == "codex_plugin_folder_replaced"
+    return (entry["host"] == "claude" and bool(entry.get("host_release_outdated")) and entry["status"] == "pending"
+            and saved_detail(state, entry["handle"]) != "plugin_load_error")
+
+
 def resume_outdated(orca: Orca, sessions: Sequence[dict], state: dict, run_id: str, system: ProcessOs | None = None,
                     sleep: Callable[[float], None] = time.sleep) -> None:
-    """Resume, before anything else is sent, each session that runs an older release and passes every resume check.
+    """Resume, before anything else is sent, each session that runs an older release or a replaced Codex plugin folder and
+    passes every resume check.
 
-    A session that fails a check stays as planned and keeps its place in the resume approval list."""
-    candidates = [entry for entry in sessions if entry["host"] == "claude" and entry.get("host_release_outdated")
-                  and entry["status"] == "pending" and not entry["initiator"] and not entry.get("handled")
-                  and saved_detail(state, entry["handle"]) != "plugin_load_error"]
+    A session that fails a check stays as planned and keeps its place in the resume approval list. A Codex session that
+    is busy is deferred with the remaining action `resume`, which the helper carries out once its turn ends."""
     views: dict[str, dict] = {}
-    for entry in candidates:
+    for entry in [entry for entry in sessions if resume_candidate(entry, state)]:
         live = {item.get("handle"): item for item in orca.terminals()}
         try:
             result = resume_session(orca, entry, state, live, system, sleep, reload=False)
         except RefreshError as error:
             result = {"status": "failed", "detail": error.code}
+        if entry["host"] == "codex" and (result["status"], result["detail"]) == ("skipped", "busy"):
+            entry.update(status="deferred", detail="busy", actions=["resume"])
+            continue
         record_resume(entry, result)
         if result["status"] != "skipped":
             views[entry["handle"]] = resume_view(entry["handle"], entry, result)
     if views:
         update_run(run_id, lambda saved: {**saved, "resumed": {**saved.get("resumed", {}), **views}})
+
+
+WAITING_REASONS = frozenset({"busy", "background_task", "host_record_unavailable", "unsent_input", "input_unknown", "probe_interrupted",
+                             "terminal_orphaned", "terminal_unavailable", "orchestration_mail_pending"})
+
+
+def resume_deferred(orca: Orca, entry: dict, state: dict, system: ProcessOs | None, sleep: Callable[[float], None]) -> None:
+    """Carry out a deferred `resume` once the helper judges the session idle: a result that says the session is not ready
+    keeps the entry pending, any other skip ends it so the user can approve the resume."""
+    live = {item.get("handle"): item for item in orca.terminals()}
+    try:
+        result = resume_session(orca, entry, state, live, system, sleep, reload=False)
+    except RefreshError as error:
+        result = {"status": "failed", "detail": error.code}
+    if result["status"] == "skipped" and result["detail"] in WAITING_REASONS:
+        entry["detail"] = result["detail"]
+        return
+    if result["status"] == "skipped":
+        entry.update(status="skipped", detail="codex_plugin_folder_replaced", actions=[])
+    record_resume(entry, result)
+    if entry["status"] == "failed":
+        entry["actions"] = []
 
 
 def run_resume(run_id: str, handles: Sequence[str], orca: Orca | None = None, system: ProcessOs | None = None,
