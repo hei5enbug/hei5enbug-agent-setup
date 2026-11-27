@@ -12,6 +12,18 @@ INBOX_LIMIT = 100000
 MAIL_PAGE_LIMIT = 100
 
 
+class LazyOrca:
+    """Builds the Orca wrapper on first use, so an answer that touches no terminal needs no Orca CLI."""
+
+    def __init__(self, factory: Callable[[], "Orca"]) -> None:
+        self._factory, self._orca = factory, None
+
+    def __getattr__(self, name: str):
+        if self._orca is None:
+            self._orca = self._factory()
+        return getattr(self._orca, name)
+
+
 class Orca:
     """Thin wrapper over the Orca CLI so the refresh logic can be tested without Orca."""
 

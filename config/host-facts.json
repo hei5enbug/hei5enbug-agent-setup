@@ -810,6 +810,42 @@
           "contains": "read-only subagents, give each the same limits"
         }
       ]
+    },
+    {
+      "id": "codex-hooks-state-two-hash-fields",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "Codex's `/hooks` records trust for a hook as `trusted_hash` for the hook part and `trusted_content_hash` for the content part of a two-part current hash.",
+      "doc_url": "local evidence: hooks.state entries in the Codex config.toml written by the Codex TUI on Codex CLI 0.172.0",
+      "quote": "Entries written by the Codex TUI under [hooks.state.\"<hook key>\"] carry two fields, trusted_hash and trusted_content_hash, each holding a sha256 value, beside entries with trusted_hash alone. Codex hooks page: \"Codex records trust against the hook's current hash.\"",
+      "min_version": "0.172.0",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "as `trusted_hash` for the hook part and `trusted_content_hash` for the"
+        },
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "content part of a two-part hash as Codex's own `/hooks` stores it"
+        }
+      ]
+    },
+    {
+      "id": "codex-hook-content-hash-covers-git-folder",
+      "host": "codex",
+      "kind": "host-fact",
+      "statement": "On Codex 0.172.0 the content part of a plugin hook's current hash also covers the install's `.git` folder, so rewriting that folder changes the hash and resets hook trust.",
+      "doc_url": "local evidence: isolated CODEX_HOME experiment with codex app-server hooks/list on Codex CLI 0.172.0",
+      "quote": "In an isolated install, appending one line to .git/logs/HEAD changed the content part of the hook's currentHash reported by hooks/list.",
+      "min_version": "0.172.0",
+      "verified_on": "2026-11-27",
+      "lines": [
+        {
+          "file": "docs/instructions-and-delegation.md",
+          "contains": "content part also covers the install's `.git` folder, so any later rewrite of the install changes it."
+        }
+      ]
     }
   ]
 }

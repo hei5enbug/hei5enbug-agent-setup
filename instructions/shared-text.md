@@ -91,11 +91,13 @@ python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <
 - It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
   no conversation context review the draft against only the rules and sources you passed. The check passes lists of
   identifiers as advisories for the reviewer to judge against the destination's writing rules.
-- Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text, or keep a flagged sentence
-  and state your reason for it. When you change the text, repeat both passes over the whole text as
-  [the update rule](shared-text.md#cut-and-completeness-passes) says, check that each sentence you added or changed
-  matches the sources, has one meaning, and restates no source, then run `text_review.py check --kind <kind> <file>`
-  on the changed text, fix each finding, and post. Run the reviewer no second time for the draft.
+- Exit 0: post the reviewed text unchanged. Exit 1 with `"stage": "check"` means no reviewer ran: fix each finding
+  and run `review` again. Exit 1 after a reviewer ran (`"stage": "review"`): apply each finding to the whole text, or
+  keep a flagged sentence and state your reason for it. When you change the text, repeat both passes over the whole
+  text as [the update rule](shared-text.md#cut-and-completeness-passes) says, check that each sentence you added or
+  changed matches the sources, has one meaning, and restates no source, then run
+  `text_review.py check --kind <kind> <file>` on the changed text, fix each finding, and post. Run the reviewer no
+  second time for the draft.
 - When a finding can be resolved only by a decision the user must make, such as a scope or a fact the sources do not
   settle, apply the other findings, post nothing, and ask about that finding.
 - Exit 3 means the reviewer gave no verdict. Say that the review did not run, show the cause in the result's `error`

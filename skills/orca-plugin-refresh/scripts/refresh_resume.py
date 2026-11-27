@@ -230,6 +230,8 @@ RESUME_CARRIED = ("note", "exit_late", "exit_state", "terminal_handle", "resume_
 def record_resume(entry: dict, result: dict) -> None:
     """Fold one resume result into an apply entry: no reload is left for a resumed session, a compact only when planned."""
     carried = {key: result[key] for key in RESUME_CARRIED if result.get(key)}
+    if result["status"] != "skipped":
+        entry.pop("resume_check", None)
     if result["status"] == "skipped":
         entry.update(resume_check=result["detail"], **{key: value for key, value in carried.items() if key == "probe_position"})
     elif result["status"] == "done":
@@ -296,6 +298,9 @@ def resume_deferred(orca: Orca, entry: dict, state: dict, system: ProcessOs | No
         result = {"status": "failed", "detail": error.code}
     if result["status"] == "skipped" and result["detail"] in WAITING_REASONS:
         entry["detail"] = result["detail"]
+        entry.pop("resume_check", None)
+        if result["detail"] != "busy":
+            entry["resume_check"] = result["detail"]
         return
     if result["status"] == "skipped":
         entry.update(status="skipped", detail="codex_plugin_folder_replaced", actions=[])

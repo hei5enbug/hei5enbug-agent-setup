@@ -6,8 +6,8 @@ annotated tag) to its `config.toml` ref, not the tag name, because Codex reinsta
 tag name at every start. Preview tags are excluded. The tag name stays in the pins and reports. A ref that is already
 the commit of an advertised tag counts as pinned to that tag.
 It snapshots the installed versions first because even `codex plugin list` can trigger an automatic update.
-If the initial install gate defers Codex before ref selection, it leaves refs unchanged and runs no Codex command
-for configured Git marketplaces.
+If the initial install gate defers Codex before ref selection, it leaves refs unchanged, a tag-name ref included, and runs
+no Codex command for configured Git marketplaces; the install job pins the commit when it actually installs.
 
 A marketplace with no release tag keeps its ref and gets `codex_marketplace_untagged`. The script runs no explicit
 upgrade or install for it and continues with other marketplaces. Report that any Codex start can still install its

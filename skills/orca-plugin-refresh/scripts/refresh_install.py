@@ -327,6 +327,14 @@ def rollout_busy(path: Path) -> bool:
         return False
 
 
+def rollout_open(path: Path) -> bool:
+    """True until the rollout's own records show its turn ended, however long ago it was written; False when it cannot be read."""
+    try:
+        return not rollout_idle(path)
+    except OSError:
+        return False
+
+
 def install_gate(host: str, ignore_env: bool = False) -> RefreshError | None:
     """Why an install on `host` must wait, or None. A Codex update deletes the old install, so no Codex turn may run.
 

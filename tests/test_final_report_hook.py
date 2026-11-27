@@ -471,6 +471,28 @@ class FinalReportHookTest(unittest.TestCase):
         # Then
         self.assertIn("differs from the draft", output["reason"])
 
+    def check_output(self, draft: str) -> str:
+        path = self.transcript.parent / "draft.md"
+        path.write_text(draft, encoding="utf-8")
+        completed = subprocess.run(
+            [sys.executable, str(SCRIPTS / "text_review.py"), "check", "--kind", "final-report", str(path)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout)
+        return completed.stdout + "exit=0"
+
+    def test_셸_변수로_실행한_check의_실제_출력_해시도_검토_결과처럼_알아본다(self):
+        """check 명령이 출력한 stage와 kind 없는 해시도 같은 보고와는 통과하고 바뀐 보고는 막는다."""
+        # Given
+        output = self.check_output(REPORT)
+        self.reviewed_turn(('python3 "$S" check --kind "$K" /tmp/work/r.md', "c1", output))
+        # When
+        same = self.run_hook()
+        changed = self.run_hook(last_assistant_message=REPORT + "More.")
+        # Then
+        self.assert_passes(same)
+        self.assertIn("differs from the draft", self.assert_blocks(changed)["reason"])
+
     def test_다른_종류의_검토_결과만_있으면_막는다(self):
         # Given
         self.reviewed_turn((VARIABLE_REVIEW, "r1", review_output(REPORT, kind="commit-message")))

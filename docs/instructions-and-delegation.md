@@ -55,8 +55,10 @@ fetched into a scratch repository. Local refs and tags count for nothing, and wi
 preflight finds the guard untrusted. A marketplace whose `ref` is an annotated tag name makes Codex reinstall the plugin at every start, which resets the
 trust, because the install marker's revision is the tag's peeled commit. `orca-plugin-refresh` therefore pins the `ref`
 of a Git marketplace to that commit instead of the tag name; Codex then reinstalls once and stops, so the recorded trust
-persists. A Claude Code prompt starts the same re-trust, detached, when the Codex install folder of this plugin differs
-from the folder recorded after the last re-trust (`python3 scripts/codex_hook_trust.py heal` runs it by hand). That
+persists. A Claude Code prompt starts the same re-trust, detached, only while the marketplace `ref` in the Codex
+`config.toml` is a full commit and the Codex install folder of this plugin differs from the folder recorded after the
+last re-trust (`python3 scripts/codex_hook_trust.py heal` runs it by hand); with a tag-name `ref` it starts nothing,
+because a Codex start would reinstall the plugin. That
 check reads file metadata only, never delays the prompt, prints nothing into it, and a lock under
 `$XDG_STATE_HOME/hei5enbug-agent-setup/codex-trust/` keeps one re-trust running at a time. After a failed re-trust the
 same folder is retried at most every ten minutes. The re-trust records each hook's current hash through the

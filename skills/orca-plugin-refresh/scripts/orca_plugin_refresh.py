@@ -44,7 +44,7 @@ from refresh_answers import checked_codex_answers, decided_entry, parse_answers 
 from refresh_handoff import add_questions, alive, follow_item, hand_to_helper, handled, handoff_point, public  # noqa: E402
 from refresh_trust import CODEX_TRUST_TIMEOUT_SECONDS, settle_companion_trust, trust_codex_hooks  # noqa: E402
 from refresh_codex_session import gate_sessions  # noqa: E402
-from refresh_orca import Orca  # noqa: E402
+from refresh_orca import LazyOrca, Orca  # noqa: E402
 from refresh_orphans import run_close, run_orphans  # noqa: E402
 from refresh_interrupt import interrupt_apply, send_continue  # noqa: E402
 from refresh_manual import ACTIONS as MANUAL_ACTIONS, RESULTS as MANUAL_RESULTS, run_record_manual  # noqa: E402
@@ -359,7 +359,7 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
         for entry in sessions:
             previous = handled(state, entry["handle"])
             if previous:
-                entry.update(status=previous, detail="already_handled_in_this_run", actions=[], handled=True)
+                entry.update(status=previous, detail="skipped_by_user" if previous == "skipped" else "already_handled_in_this_run", actions=[], handled=True)
         others = [entry for entry in sessions if not entry["initiator"] and not entry.get("handled")]
         for entry in others:
             entry["queueable"] = entry["host"] == "claude"
@@ -367,7 +367,8 @@ def command_apply(run_id: str, mode: str, only: Sequence[str], seconds: int, spa
         drive(orca, others, state, time.time() + seconds, sleep, expire="deferred")
         questions = commit_apply(run_id, mode, sessions, others, spawn)
     summary = {status: sum(1 for entry in sessions if entry["status"] == status) for status in {entry["status"] for entry in sessions}}
-    return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred", "awaiting_answer"} for entry in sessions), "run_id": run_id,
+    return {"ok": all(entry["status"] in {"done", "queued_after_turn", "deferred", "awaiting_answer"} or entry.get("detail") == "skipped_by_user"
+                      for entry in sessions), "run_id": run_id,
             "summary": summary, "sessions": [public(entry) for entry in sessions], "questions": [question_view(item) for item in questions]}
 
 
@@ -432,16 +433,25 @@ def codex_tick(run_id: str, orca: Orca, acquire: Callable[[], bool], sleep: Call
         return True
     if not acquire():
         return True
-    entry, blocked = update_host_entry("codex", job.get("ids", []), ignore_env)
+    if codex_job.claim(run_id) != "claimed":
+        return False
+    try:
+        entry, blocked = update_host_entry("codex", job.get("ids", []), ignore_env)
+    except BaseException:
+        codex_job.change_job(run_id, status="pending")
+        raise
     if blocked:
-        codex_job.change_job(run_id, detail=blocked.code)
+        codex_job.change_job(run_id, status="pending", detail=blocked.code)
         return True
+
+    failure = (entry.get("error") or {}).get("code") or next((item.get("code") or "plugin_error" for item in entry.get("plugins", [])
+                                                              if item["status"] == "error"), None)
 
     def installed(saved: dict) -> dict:
         saved["hosts"]["codex"] = entry
         saved["script"] = continuation_script(saved["hosts"])
-        saved["codex_install"] = {**saved["codex_install"], "status": "failed" if "error" in entry else "done", "finished_at": now(),
-                                  **({"detail": entry["error"]["code"]} if "error" in entry else {})}
+        saved["codex_install"] = {**saved["codex_install"], "status": "failed" if failure else "done", "finished_at": now(),
+                                  **({"detail": failure} if failure else {})}
         return saved
 
     update_run(run_id, installed)
@@ -502,35 +512,38 @@ def command_decide(run_id: str, answers: Sequence[str], spawn: Callable[[str], i
         state = load_run(run_id)
         known = state.get("questions", {})
         if len({question_id for question_id, _ in parsed}) != len(parsed) or any(
-                question_id not in known or known[question_id].get("answer") for question_id, _ in parsed):
-            raise RefreshError("question_unknown", "An answer names a question that this run did not ask or that is already answered.")
+                question_id not in known or (known[question_id].get("answer") or choice) != choice for question_id, choice in parsed):
+            raise RefreshError("question_unknown", "An answer names a question that this run did not ask or that is already answered with another choice.")
+        repeated = [(question_id, choice) for question_id, choice in parsed if known[question_id].get("answer")]
+        parsed = [item for item in parsed if item not in repeated]
         codex = [(question_id, choice) for question_id, choice in parsed if known[question_id].get("reason") == CODEX_INSTALL]
         parsed = [item for item in parsed if item not in codex]
         if codex:
             checked_codex_answers(known, codex)
-        orca = Orca()
-        entries = [decided_entry(orca, state, known[question_id], choice, system, sleep) for question_id, choice in parsed]
+        orca = LazyOrca(lambda: Orca())
+        entries = []
         mode, handed = state.get("compact_mode", "auto"), time.time()
 
-        def change(saved: dict) -> dict:
-            for question_id, choice in parsed:
+        def save(question_id: str, choice: str, entry: dict) -> None:
+            def change(saved: dict) -> dict:
                 saved["questions"][question_id].update(answer=choice, answered_at=now())
-            deferred = [entry for entry in entries if entry["status"] == "deferred"]
-            if deferred:
-                handed_off, _ = hand_to_helper(saved, run_id, [follow_item(entry, mode, handed) for entry in deferred], spawn, bool(saved.get("self")))
-                if not handed_off:
-                    for entry in deferred:
+                if entry["status"] == "deferred":
+                    handed_off, _ = hand_to_helper(saved, run_id, [follow_item(entry, mode, handed)], spawn, bool(saved.get("self")))
+                    if not handed_off:
                         entry.update(status="skipped", detail="helper_start_failed", actions=[])
-            saved["sessions"] = {**saved.get("sessions", {}), **{entry["handle"]: public(entry) for entry in entries}}
-            return saved
+                saved["sessions"] = {**saved.get("sessions", {}), entry["handle"]: public(entry)}
+                return saved
 
-        if parsed:
             update_run(run_id, change)
+
+        for question_id, choice in parsed:
+            entries.append(decided_entry(orca, state, known[question_id], choice, system, sleep))
+            save(question_id, choice, entries[-1])
         if codex:
             decide_codex(run_id, known, codex, orca, spawn, system, sleep)
     output = {"ok": all(entry["status"] in {"done", "deferred"} or entry.get("detail") == "skipped_by_user" for entry in entries), "run_id": run_id,
               "sessions": [public(entry) for entry in entries],
-              "questions": [question_view({**known[question_id], "answer": choice}) for question_id, choice in [*parsed, *codex]]}
+              "questions": [question_view({**known[question_id], "answer": choice}) for question_id, choice in [*repeated, *parsed, *codex]]}
     if codex:
         saved = load_run(run_id)
         job = saved.get("codex_install") or {}

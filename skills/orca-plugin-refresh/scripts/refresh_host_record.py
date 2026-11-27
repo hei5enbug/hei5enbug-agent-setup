@@ -29,7 +29,8 @@ QUOTED_ID = re.compile(r"\(ID: |with ID: |Task ID: |\(task ")
 BACKGROUND_MENTION = re.compile(r"(?:\brun(?:s|ning)?|\bmoved)\b[^\n]{0,60}?\b(?:in|to) the background")
 NOTIFIED_ID = re.compile(r"<task-id>([\w-]+)</task-id>")
 STOPPED_ID = re.compile(r"Successfully stopped task: ([\w-]+)")
-SCAN_MARKERS = (b"background", b"Async agent", b"Monitor started", b"Task ID:", b"<task-id>", b"stopped task")
+SCAN_MARKERS = (b"background", b"Async agent", b"Monitor started", b"Task ID:", b"<task-id>", b"stopped task", b"ScheduleWakeup", b"CronCreate")
+EARLIER_WAKEUP = "wakeup:scheduled"
 EARLIER_SCANS: dict[str, dict] = {}
 
 
@@ -108,26 +109,30 @@ def launched_ids(text: str) -> tuple[list[str], bool]:
     return ids, not ids and not QUOTED_ID.search(first) and bool(BACKGROUND_MENTION.search(first))
 
 
-def wakeup_pending(record: dict, now: float) -> bool:
+def wakeup_due(record: dict) -> float | None:
+    """When the latest wakeup or recurring schedule a record sets falls due (infinity for one with no end), else None."""
     if record.get("type") != "assistant":
-        return False
+        return None
+    due: float | None = None
     content = message_content(record)
     for part in content if isinstance(content, list) else []:
         if not (isinstance(part, dict) and part.get("type") == "tool_use"):
             continue
         if part.get("name") == "CronCreate":
-            return True
+            return float("inf")
         arguments = part.get("input") if isinstance(part.get("input"), dict) else {}
         if part.get("name") == "ScheduleWakeup" and arguments.get("stop") is not True:
-            delay = arguments.get("delaySeconds")
-            stamp = record.get("timestamp")
             try:
-                due = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() + float(delay)
+                at = datetime.fromisoformat(record.get("timestamp").replace("Z", "+00:00")).timestamp() + float(arguments.get("delaySeconds"))
             except (AttributeError, ValueError, TypeError):
-                return True
-            if due > now:
-                return True
-    return False
+                return float("inf")
+            due = at if due is None else max(due, at)
+    return due
+
+
+def wakeup_pending(record: dict, now: float) -> bool:
+    due = wakeup_due(record)
+    return due is not None and due > now
 
 
 def track_pending(record: dict, pending: set[str]) -> bool:
@@ -224,11 +229,12 @@ def transcript_tail(path: str) -> tuple[list[dict], int] | None:
 
 
 def earlier_pending(path: str, boundary: int) -> set[str]:
-    """Background IDs still pending in the file before `boundary`, scanning only bytes not seen by an earlier call."""
+    """Background IDs still pending in the file before `boundary`, plus `EARLIER_WAKEUP` while a wakeup set there is still
+    to come, scanning only bytes not seen by an earlier call."""
     status = os.stat(path)
     cached = EARLIER_SCANS.get(path)
     if not cached or cached["inode"] != status.st_ino or cached["scanned"] > boundary or status.st_size < boundary:
-        cached = EARLIER_SCANS[path] = {"inode": status.st_ino, "scanned": 0, "pending": set()}
+        cached = EARLIER_SCANS[path] = {"inode": status.st_ino, "scanned": 0, "pending": set(), "wakeup_due": 0.0}
     with open(path, "rb") as stream:
         stream.seek(cached["scanned"])
         while cached["scanned"] < boundary:
@@ -244,7 +250,8 @@ def earlier_pending(path: str, boundary: int) -> set[str]:
                 continue
             if isinstance(record, dict):
                 track_pending(record, cached["pending"])
-    return set(cached["pending"])
+                cached["wakeup_due"] = max(cached["wakeup_due"], wakeup_due(record) or 0.0)
+    return {*cached["pending"], *([EARLIER_WAKEUP] if cached["wakeup_due"] > time.time() else [])}
 
 
 def record_state(host: str, path: object, now: float | None = None, detailed: bool = False) -> str | None:

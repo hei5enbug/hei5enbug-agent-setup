@@ -1908,6 +1908,25 @@ class HostRecordTest(unittest.TestCase):
         self.assertEqual((None, "idle"), (pending, notified))
         self.assertGreaterEqual(refresh_host_record.EARLIER_SCANS[str(self.path)]["scanned"], scanned)
 
+    def test_꼬리_범위_앞에서_예약한_깨우기가_아직_오지_않았으면_백그라운드_작업이_남은_것으로_본다(self):
+        """512 KiB보다 앞에서 예약한 ScheduleWakeup이 아직 오지 않았으면 background_pending이 true이고, 이미 지났으면 false이다."""
+        # Given
+        filler = [user_record("x" * 2000) for _ in range(400)]
+        past = {**assistant_record(tool_use("ScheduleWakeup", delaySeconds=60)), "timestamp": "2000-01-01T00:00:00.000+00:00"}
+        future = assistant_record(tool_use("ScheduleWakeup", delaySeconds=3600))
+        tail = [assistant_record(), turn_end()]
+
+        # When
+        write_records(self.path, [user_record("질문"), future, *filler, *tail])
+        scheduled = refresh_host_record.background_pending(str(self.path))
+        refresh_host_record.EARLIER_SCANS.clear()
+        write_records(self.path, [user_record("질문"), past, *filler, *tail])
+        elapsed = refresh_host_record.background_pending(str(self.path))
+
+        # Then
+        self.assertGreater(self.path.stat().st_size, refresh_host_record.TRANSCRIPT_TAIL_BYTES)
+        self.assertEqual((True, False), (scheduled, elapsed))
+
     def test_앞부분_검사_결과는_이어서_쓰고_파일이_줄거나_바뀌면_처음부터_다시_읽는다(self):
         """같은 파일에 기록이 덧붙으면 이미 읽은 길이 뒤만 읽고, 파일이 더 작아지면 캐시를 버리고 다시 읽는다."""
         # Given

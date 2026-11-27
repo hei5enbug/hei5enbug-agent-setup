@@ -12,10 +12,11 @@ from refresh_core import RefreshError, parse_time
 from refresh_dialog import answer_compact_dialog, dialog_open
 from refresh_host_record import record_state
 from refresh_install import validate_install
+from refresh_interrupt import send_continue
 from refresh_orca import Orca
 from refresh_process import ProcessOs
 from refresh_resume import resume_deferred
-from refresh_sessions import FINAL_STATUSES, OPEN_STATUSES, compact_reason, host_record, release_held, step, terminal_gone
+from refresh_sessions import FINAL_STATUSES, OPEN_STATUSES, compact_reason, host_record, release_held, restorable_text, step, terminal_gone
 
 
 IDLE_CONFIRM_SECONDS = 3.0
@@ -263,11 +264,35 @@ def queued_progress(orca: Orca, entry: dict, state: dict, cache: dict[str, tuple
     return False
 
 
+def line_workable(orca: Orca, entry: dict) -> bool:
+    """True when the session's input line is empty or holds text that can be typed back exactly."""
+    try:
+        draft = orca.screen(entry["handle"])[1]
+    except RefreshError:
+        return False
+    return not (isinstance(draft, str) and draft.strip()) or restorable_text(draft)
+
+
+def unask(entry: dict) -> None:
+    """Take back a question the ordinary pass raised for an entry whose user already answered `wait`."""
+    entry.update(status="pending", detail="waiting_for_idle")
+    for key in ("ask", "background", "asked_transcript", "input_unrestorable"):
+        entry.pop(key, None)
+
+
 def deadline_detail(entry: dict) -> str:
     """Why a pending entry ends `skipped` at the one-hour limit: its own reason unless it was only waiting for the session."""
     if entry.get("queued"):
         return "queued_unconfirmed"
     return "not_idle_before_deadline" if entry.get("detail") in (None, *WAITING_DETAILS) else entry["detail"]
+
+
+def expire(entry: dict) -> None:
+    """End a pending entry at its one-hour limit; a deferred Codex resume that failed a check goes to the approval list."""
+    if entry["actions"][:1] == ["resume"] and entry.get("resume_check"):
+        entry.update(status="skipped", detail="codex_plugin_folder_replaced", actions=[])
+    else:
+        entry.update(status="skipped", detail=deadline_detail(entry), actions=[])
 
 
 def applied_by_session(entry: dict, state: dict, cache: dict[str, tuple[float, bool]], waiters: IdleWaiters) -> None:
@@ -304,6 +329,12 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
 
     def report() -> None:
         finished = [entry for entry in entries if entry["status"] in FINAL_STATUSES and not entry.get("input_held") and entry["handle"] not in reported]
+        for entry in finished[:]:
+            if entry["status"] == "done" and entry.get("owes_continue") and not entry.get("continue_prompt"):
+                if lock.acquire():
+                    send_continue(orca, entry, sleep)
+                else:
+                    finished.remove(entry)
         if finished and progress:
             reported.update(entry["handle"] for entry in finished)
             progress(finished)
@@ -344,13 +375,14 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                     continue
                 if release_held(orca, entry):
                     continue
+                queue_now = False
                 if entry["status"] == "pending":
                     if live is not None and terminal_gone(entry, live):
                         waiters.cancel(entry["handle"])
                         entry.update(status="skipped", detail="terminal_gone", actions=[])
                         continue
                     if time.time() >= entry["deadline"]:
-                        entry.update(status="skipped", detail=deadline_detail(entry), actions=[])
+                        expire(entry)
                         continue
                     if entry.get("queued") and (queued_progress(orca, entry, state, cache, lock) or entry["status"] != "pending"):
                         continue
@@ -365,20 +397,23 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                         needed = current_actions(entry, state)
                         record = host_record(entry, needed)
                         idle = waiters.take(handle)
-                        if record in ("busy", "owing") or (record is None and idle is None):
-                            waiters.start(handle, entry["deadline"])
-                            entry["detail"] = "waiting_for_idle"
-                            continue
-                        if record is None and not idle:
-                            continue
-                        sleep(IDLE_CONFIRM_SECONDS)
-                        if record == "idle" and host_record(entry, needed) != "idle":
-                            continue
+                        queue_now = (record == "busy" and entry["host"] == "claude" and bool(entry.get("keep_unrestorable_input"))
+                                     and line_workable(orca, entry))
+                        if not queue_now:
+                            if record in ("busy", "owing") or (record is None and idle is None):
+                                waiters.start(handle, entry["deadline"])
+                                entry["detail"] = "waiting_for_idle"
+                                continue
+                            if record is None and not idle:
+                                continue
+                            sleep(IDLE_CONFIRM_SECONDS)
+                            if record == "idle" and host_record(entry, needed) != "idle":
+                                continue
                     still_needed(entry, state, cache)
                     if entry["status"] != "pending":
                         continue
                     if time.time() >= entry["deadline"]:
-                        entry.update(status="skipped", detail=deadline_detail(entry), actions=[])
+                        expire(entry)
                         continue
                 if not lock.acquire():
                     continue
@@ -386,7 +421,12 @@ def follow_up(orca: Orca, entries: list[dict], state: dict, sleep: Callable[[flo
                     if entry["status"] == "pending" and entry["actions"][:1] == ["resume"]:
                         resume_deferred(orca, entry, state, system, sleep)
                     else:
+                        entry["queueable"] = queue_now
                         step(orca, entry, state["hosts"][entry["host"]], live)
+                        if queue_now and entry["status"] == "awaiting_answer":
+                            unask(entry)
+                        elif queue_now and entry.get("queued") and entry["status"] == "deferred":
+                            entry["status"] = "pending"
                 except RefreshError as error:
                     entry.update(status="failed", detail=error.code, actions=[])
             if not sending(entries):

@@ -16,6 +16,7 @@ import test_refresh_resume as resume_base
 import refresh_follow
 import refresh_interrupt
 import refresh_sessions
+from refresh_core import RefreshError
 
 HANDLE = "term_demo-a"
 RELOADED = {"type": "system", "subtype": "local_command", "content": "<local-command-stdout>Reloaded: 7 plugins</local-command-stdout>"}
@@ -190,6 +191,53 @@ class QueueBusySessionTest(BusyCase):
         self.assertEqual([], result["questions"])
 
 
+    def test_첫_명령을_넣은_뒤_대화상자가_열리면_두_번째_명령은_넣지_않고_보낸_명령만_queued로_보고한다(self):
+        """term_demo-a: /reload-plugins를 넣은 직후 권한 대화상자가 열리면 /compact는 입력하지 않고, queued에는 보낸 reload만 담으며, 대화상자가 닫히고 차례가 끝난 뒤 도우미가 compact를 보통 경로로 한 번 보낸다."""
+        # Given
+        path = self.running(digest="old")
+
+        def simulate(fake, handle, text):
+            if text == "/reload-plugins":
+                fake.screens[handle] = list(PERMISSION)
+                self.append(path, RELOADED)
+            else:
+                self.write_marker(handle, "claude", digest="d", transcript=path)
+
+        fake = self.orca([terminal(HANDLE, "claude")], busy={HANDLE: 10**6}, on_send=simulate)
+        run_id = self.save_run()
+
+        # When
+        applied = self.apply(fake, run_id=run_id)
+        fake.screens[HANDLE] = list(CLAUDE_EMPTY)
+        self.append(path, turn_end())
+        fake.busy[HANDLE] = 0
+        status = self.helper(fake, run_id)
+
+        # Then
+        view = applied["sessions"][0]
+        self.assertEqual(("deferred", "commands_queued", ["reload"]), (view["status"], view["detail"], view["queued"]))
+        self.assertEqual([(HANDLE, "/reload-plugins"), (HANDLE, "/compact")], fake.sent)
+        self.assertEqual(("done", ["reload", "compact"]), (status["sessions"][0]["status"], status["sessions"][0]["completed"]))
+
+    def test_입력줄을_못_읽는_바쁜_세션은_예외_대신_state_unreadable로_묻는다(self):
+        """term_demo-a: 차례가 진행 중인 것을 아는 세션의 화면을 읽다 예외가 나면 실패가 아니라 아무것도 보내지 않고 state_unreadable 질문을 돌려준다."""
+        # Given
+        self.running()
+        fake = self.orca([terminal(HANDLE, "claude")])
+
+        def unreadable(handle):
+            raise RefreshError("orca_invalid", "screen unreadable")
+
+        fake.screen = unreadable
+
+        # When
+        result = self.apply(fake)
+
+        # Then
+        question = self.assert_asked(result, fake, "state_unreadable")
+        self.assertIs(False, question["background"])
+
+
 class AskBusySessionTest(BusyCase):
     def companion(self, *, declares=None, previous_exists=True):
         old, new = Path(self.temp.name) / "demo-plugin-1.0.0", Path(self.temp.name) / "demo-plugin-1.1.0"
@@ -359,8 +407,8 @@ class QuestionCommandsTest(BusyCase):
         self.assertEqual(["q1"], [question["id"] for question in status["questions"]])
         self.assertEqual(1, status["unanswered"])
 
-    def test_알_수_없거나_이미_답한_질문_id는_question_unknown이다(self):
-        """term_demo-a: 없는 질문 id와 이미 답한 질문 id는 아무것도 하지 않고 question_unknown으로 끝나며 종료 코드는 2이다."""
+    def test_알_수_없는_질문_id와_이미_답한_질문에_다른_선택을_하면_question_unknown이고_같은_선택은_무시한다(self):
+        """term_demo-a: 없는 질문 id와 이미 답한 질문에 다른 선택을 하면 아무것도 하지 않고 question_unknown(종료 코드 2)이며, 같은 선택을 되풀이하면 오류 없이 무시하고 아무것도 보내지 않는다."""
         # Given
         fake, result = self.asked()
         run_id = result["run_id"]
@@ -369,12 +417,14 @@ class QuestionCommandsTest(BusyCase):
         # When
         with patch.object(refresh, "Orca", return_value=fake):
             unknown_code, unknown = self.run_main("decide", "--run-id", run_id, "--answer", "q9=skip", "--json")
-            again_code, again = self.run_main("decide", "--run-id", run_id, "--answer", "q1=skip", "--json")
+            other_code, other = self.run_main("decide", "--run-id", run_id, "--answer", "q1=interrupt", "--json")
+            same_code, same = self.run_main("decide", "--run-id", run_id, "--answer", "q1=skip", "--json")
 
         # Then
         self.assertEqual((2, "question_unknown"), (unknown_code, unknown["error"]["code"]))
-        self.assertEqual((2, "question_unknown"), (again_code, again["error"]["code"]))
-        self.assertEqual([], fake.sent)
+        self.assertEqual((2, "question_unknown"), (other_code, other["error"]["code"]))
+        self.assertEqual((0, [], ["q1"]), (same_code, same["sessions"], [question["id"] for question in same["questions"]]))
+        self.assertEqual(([], []), (fake.sent, fake.keystrokes))
 
     def test_skip_답은_아무것도_보내지_않고_skipped_by_user로_끝낸다(self):
         """term_demo-a: skip을 고르면 키도 명령도 보내지 않고 skipped_by_user로 끝내며 질문에 답이 기록된다."""
@@ -427,6 +477,99 @@ class QuestionCommandsTest(BusyCase):
         # Then
         self.assertEqual([(HANDLE, "/reload-plugins")], fake.sent)
         self.assertEqual("done", status["sessions"][0]["status"])
+
+
+    def test_답이_없거나_skip인_세션은_같은_run에서_apply를_다시_해도_건드리지_않는다(self):
+        """term_demo-a: 답을 기다리는 세션과 skip으로 답한 세션은 대화상자가 닫힌 뒤 같은 run에서 apply를 다시 해도 아무것도 보내지 않고, 기다리는 질문은 그대로 다시 돌려주며 skip은 skipped_by_user로 남는다."""
+        # Given
+        self.running()
+        fake = self.orca([terminal(HANDLE, "claude")], screens={HANDLE: PERMISSION})
+        run_id = self.save_run()
+        self.apply(fake, run_id=run_id)
+        fake.screens[HANDLE] = list(CLAUDE_EMPTY)
+
+        # When
+        waiting = self.apply(fake, run_id=run_id)
+        self.decide(fake, run_id, "q1=skip")
+        skipped = self.apply(fake, run_id=run_id)
+
+        # Then
+        self.assertEqual(("awaiting_answer", ["q1"]), (waiting["sessions"][0]["status"], [question["id"] for question in waiting["questions"]]))
+        self.assertEqual(([], []), (fake.sent, fake.keystrokes))
+        self.assertEqual(("skipped", "skipped_by_user", []), (skipped["sessions"][0]["status"], skipped["sessions"][0]["detail"], skipped["questions"]))
+        self.assertTrue(skipped["ok"])
+
+    def test_대화상자와_붙여넣기가_함께_있어도_wait를_답하면_도우미는_붙여넣은_글을_지우지_않는다(self):
+        """term_demo-a: 권한 대화상자 때문에 묻는 세션의 줄에 붙여넣기 자리표시자가 있으면 wait를 답한 뒤 대화상자가 닫히고 차례가 끝나도 도우미는 아무것도 보내거나 지우지 않고, 한도에 이르면 input_not_restorable로 건너뛴다."""
+        # Given
+        path = self.running()
+        fake = self.orca([terminal(HANDLE, "claude")], screens={HANDLE: PERMISSION}, typed={HANDLE: PLACEHOLDER})
+        result = self.apply(fake)
+        self.decide(fake, result["run_id"], "q1=wait")
+        fake.screens[HANDLE] = list(CLAUDE_EMPTY)
+        self.append(path, assistant_record(), turn_end())
+
+        # When
+        with patch.object(refresh, "FOLLOW_UP_SECONDS", 0.5):
+            status = self.helper(fake, result["run_id"])
+
+        # Then
+        self.assertEqual("dialog_open", result["questions"][0]["reason"])
+        self.assertEqual(([], []), (fake.sent, fake.keystrokes))
+        self.assertEqual(PLACEHOLDER, fake.draft(HANDLE))
+        self.assertEqual(("skipped", "input_not_restorable"), (status["sessions"][0]["status"], status["sessions"][0]["detail"]))
+
+    def test_붙여넣기가_있어_wait한_세션은_차례가_진행_중이어도_줄이_비면_도우미가_바로_대기열에_넣는다(self):
+        """term_demo-a: input_not_restorable에 wait를 답한 세션의 줄이 차례가 아직 진행 중일 때 비면 도우미는 쉬기를 기다리지 않고 /reload-plugins를 한 번 대기열에 넣는다."""
+        # Given
+        path = self.running()
+        fake = self.orca([terminal(HANDLE, "claude")], typed={HANDLE: PLACEHOLDER}, on_send=lambda orca, handle, text: self.append(path, RELOADED))
+        result = self.apply(fake)
+        self.decide(fake, result["run_id"], "q1=wait")
+        fake.typed[HANDLE] = ""
+        fake.busy[HANDLE] = 10**6
+
+        # When
+        with patch.object(refresh, "FOLLOW_UP_SECONDS", 2):
+            status = self.helper(fake, result["run_id"])
+
+        # Then
+        self.assertEqual([(HANDLE, "/reload-plugins")], fake.sent)
+        self.assertEqual("done", status["sessions"][0]["status"])
+
+    def test_두_번째_세션에서_decide가_실패해도_첫_답은_저장되어_다시_해도_첫_세션에_Esc를_다시_보내지_않는다(self):
+        """term_demo-a, term_demo-b: 두 interrupt 답 가운데 두 번째 터미널이 Esc를 거부해 decide가 중간에 실패해도 첫 답과 결과는 저장되어, 같은 답으로 다시 해도 첫 세션에는 Esc가 한 번만 나가고 둘째가 처리된다."""
+        # Given
+        handles = ("term_demo-a", "term_demo-b")
+        paths = {handle: self.running(handle=handle) for handle in handles}
+        fake = self.orca([terminal(handle, "claude") for handle in handles], screens={handle: PERMISSION for handle in handles})
+        rejected = [True]
+
+        def on_keys(orca, handle, text):
+            if text != ESC:
+                return
+            orca.typed[handle] = ""
+            if handle == handles[1] and rejected:
+                rejected.clear()
+                raise RefreshError("orca_rejected", "Esc rejected")
+            self.append(paths[handle], INTERRUPTED)
+            orca.screens[handle] = list(CLAUDE_EMPTY)
+
+        fake.on_keys = on_keys
+        fake.on_send = lambda orca, handle, text: self.append(paths[handle], RELOADED) if text == "/reload-plugins" else None
+        result = self.apply(fake)
+        answers = ["q1=interrupt", "q2=interrupt"]
+
+        # When
+        with self.assertRaises(RefreshError):
+            self.decide(fake, result["run_id"], *answers)
+        retried = self.decide(fake, result["run_id"], *answers)
+
+        # Then
+        escapes = [handle for handle, text in fake.keystrokes if text == ESC]
+        self.assertEqual({handles[0]: 1, handles[1]: 2}, {handle: escapes.count(handle) for handle in handles})
+        self.assertEqual(["done"], [view["status"] for view in retried["sessions"]])
+        self.assertEqual(0, refresh.command_status(result["run_id"])["unanswered"])
 
 
 class HelperQueuedTest(BusyCase):
@@ -633,6 +776,57 @@ class InterruptTest(resume_base.ResumeCase):
         # Then
         self.assertEqual([("send", "/reload-plugins")], self.log)
         self.assertEqual(("done", None), (decided["sessions"][0]["status"], decided["sessions"][0].get("continue_prompt")))
+
+
+    def test_질문_뒤_터미널의_대화가_바뀌었으면_interrupt를_답해도_아무것도_보내지_않고_session_replaced로_실패한다(self):
+        """term_claude: 질문을 한 뒤 같은 터미널에서 다른 대화(다른 기록 파일)가 시작됐으면 interrupt 답은 Esc도 종료도 재개도 보내지 않고 session_replaced로 실패한다."""
+        # Given
+        self.asked(RUNNING_TURN)
+        other = "99999999-8888-7777-6666-555555555555"
+        write_records(Path(self.temp.name) / f"{other}.jsonl", RUNNING_TURN)
+        self.write_marker("startup", session=other)
+
+        # When
+        decided = self.interrupt()
+
+        # Then
+        self.assertEqual(([], []), (self.log, self.fake.sent))
+        self.assertEqual(("failed", "session_replaced"), (decided["sessions"][0]["status"], decided["sessions"][0]["detail"]))
+        self.assertFalse(decided["ok"])
+
+    def test_종료와_재개_점검이_막으면_compact_없이_reload만_보내고_이어서_작업하라고_하며_점검_결과를_메모로_남긴다(self):
+        """term_claude: 남은 백그라운드 작업이 없는데 실행 인자를 몰라 재개 점검이 건너뛰어지면 /compact 없이 /reload-plugins만 보낸 뒤 이어서 작업하라는 문장을 보내고 점검 결과를 note로 알린다."""
+        # Given
+        self.processes.table[self.pid]["argv"] = ["claude", "--brand-new-option", "value"]
+        self.asked(RUNNING_TURN, digest="old")
+
+        # When
+        decided = self.interrupt()
+
+        # Then
+        self.assertEqual([("keys", ESC), ("send", "/reload-plugins"), ("send", refresh_interrupt.CONTINUE_PROMPT)], self.log)
+        view = decided["sessions"][0]
+        self.assertEqual(("done", "resume_check_skipped:launch_arguments_unknown", "sent"), (view["status"], view["note"], view["continue_prompt"]))
+
+    def test_도우미에게_넘긴_interrupt_세션도_동작이_끝나면_도우미가_이어서_작업하라고_보낸다(self):
+        """term_claude: interrupt 뒤 조율 메일 때문에 도우미에게 넘어간 세션은 compact_while_owing과 이어서 작업할 의무를 지켜, 도우미가 reload와 compact를 확인한 다음 이어서 작업하라는 문장을 보내고 done으로 끝낸다."""
+        # Given
+        self.asked(BACKGROUND_TURN)
+        self.fake.mail.add(resume_base.HANDLE)
+
+        # When
+        with patch.object(refresh_interrupt, "APPLY_SECONDS", 0.3):
+            deferred = self.interrupt()
+        self.fake.mail.clear()
+        with patch.object(refresh_follow, "install_current", return_value=True), patch.object(refresh, "Orca", return_value=self.fake), \
+                patch.object(refresh, "FOLLOW_UP_SECONDS", 5):
+            refresh.command_self_apply(self.run_id, sleep=lambda seconds: None)
+        status = refresh.command_status(self.run_id)
+
+        # Then
+        self.assertEqual("deferred", deferred["sessions"][0]["status"])
+        self.assertEqual([("keys", ESC), ("send", "/reload-plugins"), ("send", "/compact"), ("send", refresh_interrupt.CONTINUE_PROMPT)], self.log)
+        self.assertEqual(("done", "sent"), (status["sessions"][0]["status"], status["sessions"][0]["continue_prompt"]))
 
 
 if __name__ == "__main__":

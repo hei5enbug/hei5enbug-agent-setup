@@ -8,7 +8,7 @@
 `/reload-plugins`를 보내지 않는다. 이후 `/compact`는 불러온 지침이 오래됐을 때만 보내므로, 대화에는 최종적으로
 현재 지침이 한 벌만 남는다. 확인을 통과하지 못한 세션은 계획된 상태를 유지하고, 실패한 확인을 `resume_check`에
 표시하며, 승인을 한 번 요청한다. `plugin_load_error`가 있는 세션은 승인 없이 재개하지 않는다. 바쁜 Codex 세션은 남은 작업 `resume`과 함께 `deferred`가 되며,
-롤아웃에 턴 종료가 기록되면 도우미가 묻지 않고 재개한다. 그때 확인이 실패하면 `resume_check`와 함께 `skipped`로 끝난다.
+롤아웃에 턴 종료가 기록되면 도우미가 묻지 않고 재개한다. 그때 확인이 실패하고 한 시간 제한에서도 여전히 실패하면 `resume_check`와 `resume_approval_needed`를 함께 기록하고 `skipped`로 끝난다.
 
 `resume` 하위 명령은 `resume_approval_needed`를 보고한 Claude Code 또는 Codex 세션에만, 그리고 현재 요청에서 사용자가
 승인한 터미널에만 실행한다. `python3 <script> resume --run-id <run_id> --terminal <handle> --json`을 실행하며,

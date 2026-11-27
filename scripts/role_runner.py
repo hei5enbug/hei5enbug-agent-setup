@@ -115,7 +115,9 @@ def explain_heartbeat(host: str, marker: str, listing: Callable[[], list] | None
             else:
                 if not guard_ready(listed):
                     found = guard_states(listed)
-                    return hooks_message(found), {"cause": "untrusted", "hooks": found}
+                    if any(hook["trust"] != "trusted" or hook["enabled"] is not True for hook in found):
+                        return hooks_message(found), {"cause": "untrusted", "hooks": found}
+                    extra = {"hooks": found}
         return GUARD_UNKNOWN_MESSAGE.format(host=name, heartbeat=heartbeat), {"cause": "unknown", **extra}
 
     return explain
@@ -164,7 +166,11 @@ def preflight_healing(run: Run, cwd: str, mcp_off: list[str], timeout: int) -> R
     except RunnerError as error:
         if error.code != EXIT_EVIDENCE or run.resume is not None:
             raise
-        listed = hooks_for_cwd(app_server_hooks(run.target, mcp_off, cwd, timeout), cwd)
+        try:
+            listed = hooks_for_cwd(app_server_hooks(run.target, mcp_off, cwd, timeout), cwd)
+        except RunnerError as listing_error:
+            error.evidence = {**error.evidence, "hooks_error": str(listing_error)}
+            raise error from listing_error
         if guard_ready(listed) or not guard_ready(heal_hooks(run.target, mcp_off, cwd, timeout, listed)[0]):
             raise
     return preflight_thread(run, cwd, mcp_off, timeout)
@@ -190,12 +196,12 @@ def execute_codex(args: argparse.Namespace, run: Run, prompt: str, cwd: str) -> 
         run = preflight_healing(run, cwd, mcp_off, args.timeout)
     else:
         ready = require_hooks_ready(run.target, mcp_off, cwd, args.timeout)
-        explain = explain_heartbeat("codex", run.target, lambda: ready)
         if run.resume is not None:
-            require_heartbeat("codex", run.resume, explain)
+            require_heartbeat("codex", run.resume, explain_heartbeat("codex", run.target, lambda: ready))
     evidence = run_codex(args, run, prompt, cwd, mcp_off)
     if not run.writing and evidence["tool_calls"]:
-        require_heartbeat("codex", evidence["session"], explain)
+        fresh = lambda: hooks_for_cwd(app_server_hooks(run.target, mcp_off, cwd, args.timeout), cwd)  # noqa: E731
+        require_heartbeat("codex", evidence["session"], explain_heartbeat("codex", run.target, fresh))
     result_path = Path(args.result)
     if not result_path.is_file() or not result_path.read_text(encoding="utf-8").strip():
         raise RunnerError(EXIT_EVIDENCE, f"Codex wrote no answer at {result_path}")
@@ -287,12 +293,20 @@ def capability_fallback(target: str, host: str, primary: str) -> dict:
     return CAPABILITIES[target][host]["fallback"]
 
 
+def default_reviewer_model(args: argparse.Namespace) -> str:
+    """The reviewer model without --model: a validation run takes the default of the independent review of a
+    Claude-authored result; any other reviewer run takes the review model setting."""
+    if args.validation:
+        return REGISTRY["runner"]["independent_review"]["claude"][0]
+    return DEFAULT_REVIEW_MODEL
+
+
 def resolve(args: argparse.Namespace) -> Run:
     target = args.role
     if target == AGENT_TARGET:
         return agent_run(args, args.host or default_host())
     if target in ROLES:
-        model = args.model or (DEFAULT_REVIEW_MODEL if target == "reviewer" else ROLE_MODEL)
+        model = args.model or (default_reviewer_model(args) if target == "reviewer" else ROLE_MODEL)
         return Run(
             target=target, role=target, capability=None, fallback=False, runner=runner_for(model), model=model,
             effort=chosen_effort(args.effort, ROLE_ENTRY, model, args.user_requested), writing=target == "worker", add_dirs=tuple(args.add_dirs),

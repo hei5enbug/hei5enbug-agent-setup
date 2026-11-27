@@ -11,7 +11,10 @@ instructions are stale, into the input line at once and types any held text back
 The helper confirms each queued command from transcript records after the queue offset, or a compaction from a marker
 rewritten after the queue time, and sends nothing more while a queued command has not run and the turn is busy. It
 goes back to the ordinary deferred path only after the turn ended and the reload or compact timeout passed without
-evidence, rechecking what is still needed, so each command is sent once. A reload that Claude Code answers with
+evidence, rechecking what is still needed, so each command is sent once. Before each queued command after the first, the
+screen and the input line are checked again; a dialog or new input stops the typing, and the commands not typed wait for
+the ordinary path after the turn. A session still waiting for its answer, or answered `skip`, is left alone by a later
+`apply` of the same run. A reload that Claude Code answers with
 the MCP-tools refusal is `failed` with `reload_needs_force`. At the one-hour limit an unconfirmed entry is `skipped`
 with `queued_unconfirmed`; the commands may still run.
 
@@ -31,13 +34,14 @@ and `awaiting_answer` counts as ok for the exit code.
 
 ## Options
 
-Each question offers three options with an English `effect` sentence built by the script. Ask every question in
-`questions` as soon as the script returns, before any other report, with the question tool and these three options
-(up to four questions per call), then run `decide`.
+Each question offers three options with an English `effect` sentence built by the script. Ask every unanswered
+question in `questions` (one without an `answer`; `decide` and `status` also list answered ones) as soon as the script
+returns, before any other report, with the question tool and these three options (up to four questions per call), then
+run `decide`.
 
 | Option | Effect |
 |---|---|
-| `wait` | Nothing is typed now. The helper sends the commands once the session is idle, with the usual checks. For `input_not_restorable` it sends nothing while that text is still on the line, sends once the line is empty or restorable, and ends the session `skipped` with that reason when the line does not change within one hour. |
+| `wait` | Nothing is typed now. The helper sends the commands once the session is idle, with the usual checks. When the line holds text the script cannot type back exactly, whatever the `reason`, it sends nothing and deletes nothing while that text is on the line; when the line becomes empty or restorable while the turn is still running, it types the commands as a queued command at once, and it ends the session `skipped` with `input_not_restorable` when the line does not change within one hour. |
 | `interrupt` | Described under the interrupt rules. For `dialog_open`, the Esc declines the open prompt, and the effect sentence says so. |
 | `skip` | Nothing is sent. The session ends `skipped` with `skipped_by_user`. |
 
@@ -47,7 +51,11 @@ No answer authorizes `--force`. A session with no answer stays `awaiting_answer`
 
 Run `python3 <script> decide --run-id <run_id> --answer <question id>=<wait|interrupt|skip> [--answer ...] --json`
 with a shell timeout of at least 600 seconds, once for all answers. It takes the sessions lock and returns the
-sessions it handled. An unknown or already answered question id returns `question_unknown` and does nothing.
+sessions it handled. Each answer is saved right after its session is handled, so a rerun after a partial failure does not
+repeat an action. An unknown question id, or an answer that differs from the one already saved, returns `question_unknown`
+and does nothing; an answer that repeats the saved choice is ignored. A question records the conversation it was asked
+about: when the terminal runs another conversation by the time of an `interrupt` answer, nothing is sent and the session
+is `failed` with `session_replaced`.
 
 ## Interrupt rules
 
@@ -55,12 +63,13 @@ sessions it handled. An unknown or already answered question id returns `questio
 2. Otherwise the script sends one Esc and waits up to 15 seconds for the turn record to leave busy. When it does not,
    the session is `failed` with `interrupt_unconfirmed`, nothing else is sent, and a second Esc is never sent.
 3. When `background` is `false`, the script exits and resumes the session with the resume code (no `/reload-plugins`,
-   no `/compact`) and notes `resumed_without_compaction`.
+   no `/compact`) and notes `resumed_without_compaction`. When a resume check holds that back, it sends `/reload-plugins`
+   alone, never `/compact`, and the note `resume_check_skipped:<check>` names the check.
 4. Otherwise it sends `/reload-plugins` and, when the instructions are stale, `/compact` through the normal send
    path, because exiting would end the background work.
 5. After the actions are confirmed, it sends one fixed English prompt asking the session to continue the work it was
-   doing before the plugin update interrupted it, and reports `continue_prompt`. A session that did not reach `done`
-   gets no prompt.
+   doing before the plugin update interrupted it, and reports `continue_prompt`. A session that failed gets no prompt; one
+   handed to the helper keeps that duty, and the helper sends the prompt after its actions are confirmed.
 
 ## Codex sessions
 
@@ -89,10 +98,14 @@ install runs in the foreground of `decide`; with any `wait` answer the detached 
 
 The install job, in this order:
 
-1. Wait until every `wait` session's rollout has recorded the end of its turn.
-2. Send one Esc to each `interrupt` session that is still busy and confirm a turn-abort record. When none is recorded
-   within 15 seconds, send nothing more to that session and treat it as `wait`.
-3. Take the lock, recheck the gate, and run the Codex marketplace update and installs as `update` does.
+1. Wait until every `wait` session's rollout has recorded the end of its turn in its own records, however long ago it was
+   written. The session running the skill counts with the rollout found from its thread id; when none is found, `decide`
+   refuses a `wait` or `interrupt` answer with `rollout_unknown`, and `skip` still works.
+2. Send one Esc to each `interrupt` session that is still busy and still runs the conversation its question named, and
+   confirm a turn-abort record. When none is recorded within 15 seconds, Orca rejects the Esc, or the terminal runs another
+   conversation, send nothing more to that session and treat it as `wait`.
+3. Take the lock, recheck that the job is still pending and inside its limit, recheck the gate, and run the Codex
+   marketplace update and installs as `update` does; one caller installs a job. A companion that reports `error` fails the job.
 4. Write the Codex host result without the error and save the new `script` path; use it for every later command, because
    the install deletes the old copy.
 5. Plan the Codex sessions and resume the ones on replaced folders, the session that ran the skill included.

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Mapping
 
 from refresh_core import HANDLE, SESSION_CONTEXT, RefreshError
-from refresh_install import CODEX_TURN_ENV
+from refresh_install import CODEX_TURN_ENV, codex_home
 from refresh_process import ProcessOs, find_session_process
 
 THREAD_ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
@@ -127,6 +127,19 @@ def marker_handles() -> dict[str, str]:
     return found
 
 
+def thread_rollout(thread: str | None) -> str | None:
+    """The newest rollout file of a Codex thread, however long ago it was written."""
+    found: list[tuple[float, str]] = []
+    for folder, _, names in os.walk(codex_home() / "sessions") if thread else ():
+        for name in names:
+            if name.startswith("rollout-") and name.endswith(f"-{thread}.jsonl"):
+                try:
+                    found.append(((Path(folder) / name).stat().st_mtime, str(Path(folder) / name)))
+                except OSError:
+                    continue
+    return max(found)[1] if found else None
+
+
 def gate_sessions(error: RefreshError, environ: Mapping[str, str] = os.environ) -> list[dict]:
     """The Codex sessions an install gate names, one per busy rollout, matched to an Orca terminal through the Codex
     markers' transcript paths. A rollout no marker names is `outside_orca`. The session running the command, when the
@@ -141,6 +154,7 @@ def gate_sessions(error: RefreshError, environ: Mapping[str, str] = os.environ) 
         thread = next((environ[name] for name in CODEX_TURN_ENV if environ.get(name)), None)
         own_rollout = next((path for path in rollouts if thread and Path(path).name.endswith(f"-{thread}.jsonl")), None)
         own_rollout = own_rollout or next((path for path, owner in markers.items() if handle and owner == handle), None)
+        own_rollout = own_rollout or thread_rollout(thread)
         sessions.append({"rollout": own_rollout, "handle": handle, "outside_orca": handle is None, "own": True,
                          "worktree": rollout_cwd(own_rollout) if own_rollout else None})
     for path in rollouts:

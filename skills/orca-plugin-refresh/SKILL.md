@@ -101,7 +101,7 @@ Before asking a question the script returns in `questions`, or running `decide`,
    user to confirm this step; the script's checks decide which sessions receive commands. For about 20 seconds the script sends a command to an idle session whose input line is
    empty or cleared of typed text, or types it into a busy Claude Code session as a queued command, then keeps
    confirming the commands already sent and restoring any text it can restore exactly. It hands every session that is
-   still busy or not ready to one detached helper as `deferred` instead of waiting. When the output holds `questions`, ask each one with
+   still busy or not ready to one detached helper as `deferred` instead of waiting. When the output holds `questions`, ask each unanswered one with
    the question tool as soon as the script returns, before any other report, then run `decide`. An `already_running` error means another run is sending at this moment; wait for it, then run `apply` again. A host with an update error stays blocked while successful hosts
    can proceed. Before it sends anything, `apply` resumes each other Claude Code session that reports
    `host_release_outdated` and each other Codex session on a replaced plugin folder that passes every resume check (the helper

@@ -15,6 +15,7 @@ import test_orca_plugin_refresh as base
 import test_refresh_resume as resume_base
 from test_orca_plugin_refresh import CODEX_EMPTY, FakeCli, FakeOrca, refresh, rollout_event, terminal, write_rollout
 
+import refresh_codex_release
 import refresh_codex_session
 import refresh_core
 import refresh_follow
@@ -520,6 +521,238 @@ class DecideTest(InstallCase):
 
         # Then
         self.assertIn("python3 /home/test/new/orca_plugin_refresh.py status --run-id " + "a" * 32, command)
+
+
+class InstallJobReviewTest(InstallCase):
+    """Install job paths the final review reproduced: replaced conversation, stale waits, duplicate install, send failure, deadline, companion failure."""
+
+    stage_companion = base.UpdateTest.stage_companion
+
+    def asked(self, *handles):
+        for handle in handles:
+            self.add_session(handle, tail=None)
+        return self.update()
+
+    def age(self, path, seconds):
+        stamp = time.time() - seconds
+        os.utime(path, (stamp, stamp))
+
+    def test_질문_뒤_터미널이_다른_대화로_바뀌면_Esc를_보내지_않고_기다림으로_바꿔_도우미에_맡긴다(self):
+        """term_demo-a: 질문이 이름 붙인 롤아웃이 아닌 다른 대화가 터미널에서 돌면 interrupt 답에도 Esc를 보내지 않고 unconfirmed로 기다리며 설치하지 않는다."""
+        # Given
+        update = self.asked(SESSION)
+        old = self.rollouts[SESSION]
+        replacement = write_rollout(self.base / "codex-home", "demo-replacement", [
+            {"type": "session_meta", "payload": {"id": "99999999-2222-3333-4444-555555555555", "cwd": "/tmp/work"}},
+            {"type": "turn_context", "payload": {}}, rollout_event("task_started")])
+        self.rollouts[SESSION] = replacement
+        self.write_codex_marker(SESSION, "startup")
+
+        # When
+        decided = self.decide(f"{update['questions'][0]['id']}=interrupt")
+
+        # Then
+        self.assertEqual([], self.events)
+        self.assertEqual([{"terminal": f"…{SESSION[-6:]}", "state": "unconfirmed"}], decided["codex_install"]["interrupts"])
+        self.assertEqual(([str(old)], [self.run_id]), (refresh.load_run(self.run_id)["codex_install"]["waits"], self.spawned))
+
+    def test_wait한_롤아웃은_마지막_기록이_차례_끝이_아니면_오래_지나도_바쁘다고_보고_설치하지_않는다(self):
+        """term_demo-a: wait 답한 롤아웃이 30분 넘게 갱신되지 않아도 차례 종료 기록이 없으면 한도까지 기다리고 설치 명령 없이 not_idle_before_deadline로 끝낸다."""
+        # Given
+        update = self.asked(SESSION)
+        self.age(self.rollouts[SESSION], refresh_install.ROLLOUT_RECENT_SECONDS + 60)
+
+        # When
+        with patch.object(refresh, "FOLLOW_UP_SECONDS", 0.3):
+            self.decide(f"{update['questions'][0]['id']}=wait")
+            status = self.helper()
+
+        # Then
+        self.assertEqual("not_idle_before_deadline", status["codex_install"]["status"])
+        self.assertEqual([], self.installed_codex())
+
+    def test_이_세션_롤아웃이_게이트에_없어도_스레드_ID로_찾아_wait가_그_차례_끝을_기다린다(self):
+        """Codex 차례 안에서 이 세션 롤아웃이 오래돼 게이트 목록에 없어도 스레드 ID로 찾아 질문에 담고, wait는 그 롤아웃의 차례 종료까지 설치하지 않는다."""
+        # Given
+        own = write_rollout(self.base / "codex-home", "2026-thread-demo", [{"type": "session_meta", "payload": {"cwd": "/tmp/work"}}, rollout_event("task_started")])
+        self.age(own, refresh_install.ROLLOUT_RECENT_SECONDS + 60)
+
+        # When
+        with patch.dict(os.environ, {"CODEX_THREAD_ID": "thread-demo", "ORCA_TERMINAL_HANDLE": SESSION}):
+            update = self.update()
+            with patch.object(refresh, "FOLLOW_UP_SECONDS", 0.3):
+                self.decide(f"{update['questions'][0]['id']}=wait")
+                status = self.helper()
+
+        # Then
+        self.assertEqual(str(own), refresh.load_run(self.run_id)["questions"][update["questions"][0]["id"]]["rollout"])
+        self.assertEqual("not_idle_before_deadline", status["codex_install"]["status"])
+        self.assertEqual([], self.installed_codex())
+
+    def test_이_세션_롤아웃을_찾을_수_없으면_wait를_거부하고_설치하지_않으며_skip은_받는다(self):
+        """Codex 차례 안에서 이 세션 롤아웃을 알아낼 수 없으면 wait 답은 rollout_unknown으로 거부해 아무것도 바꾸지 않고 skip은 받아들인다."""
+        # Given
+        with patch.dict(os.environ, {"CODEX_THREAD_ID": "thread-missing", "ORCA_TERMINAL_HANDLE": SESSION}):
+            update = self.update()
+            question_id = update["questions"][0]["id"]
+
+            # When
+            with self.assertRaises(refresh.RefreshError) as refused:
+                self.decide(f"{question_id}=wait")
+            unanswered = refresh.command_status(self.run_id)["unanswered"]
+            skipped = self.decide(f"{question_id}=skip")
+
+        # Then
+        self.assertEqual("rollout_unknown", refused.exception.code)
+        self.assertEqual((1, [], []), (unanswered, self.installed_codex(), self.spawned))
+        self.assertEqual("skipped_by_user", skipped["codex_install"]["status"])
+
+    def test_먼저_끝낸_쪽이_설치한_작업을_뒤늦게_잠금을_얻은_쪽은_다시_설치하지_않는다(self):
+        """같은 설치 작업을 두 호출자가 동시에 진행해 한쪽이 잠금 대기 중 끝내면 나머지는 설치와 세션 적용을 되풀이하지 않는다."""
+        # Given
+        update = self.asked(SESSION)
+        self.decide(f"{update['questions'][0]['id']}=wait")
+        self.append(SESSION, "task_complete")
+        outcomes = []
+
+        def acquire():
+            if not outcomes:
+                outcomes.append(refresh.codex_tick(self.run_id, self.fake, lambda: True, lambda seconds: None, self.system, lambda run: 4242, True))
+            return True
+
+        # When
+        with self.commands():
+            outer = refresh.codex_tick(self.run_id, self.fake, acquire, lambda seconds: None, self.system, lambda run: 4242, True)
+
+        # Then
+        self.assertEqual((False, False), (outcomes[0], outer))
+        self.assertEqual(2, len(self.installed_codex()))
+        self.assertEqual(["/exit", "resume"], self.sent())
+
+    def test_Esc_전달이_거부되면_기다림으로_바꾸고_기록하지_않은_Esc를_남기지_않고_도우미에_맡긴다(self):
+        """term_demo-a: Orca가 Esc를 받지 못하면 esc_sent를 남기지 않고 unconfirmed로 기다리며 작업을 pending인 채 도우미에 넘기고 설치하지 않는다."""
+        # Given
+        update = self.asked(SESSION)
+
+        def reject(fake, handle, text):
+            raise refresh.RefreshError("input_not_accepted", "Orca did not accept the keystroke.")
+
+        self.fake.on_keys = reject
+
+        # When
+        decided = self.decide(f"{update['questions'][0]['id']}=interrupt")
+
+        # Then
+        self.assertEqual("pending", decided["codex_install"]["status"])
+        self.assertEqual([{"terminal": f"…{SESSION[-6:]}", "state": "unconfirmed"}], decided["codex_install"]["interrupts"])
+        self.assertEqual(([self.run_id], []), (self.spawned, self.installed_codex()))
+
+    def test_Esc_전달이_한도를_넘기면_설치하지_않고_not_idle_before_deadline로_끝낸다(self):
+        """term_demo-a: 한 시간 한도가 Esc를 보내는 동안 지나면 설치 직전 다시 확인해 설치 명령 없이 not_idle_before_deadline를 보고한다."""
+        # Given
+        update = self.asked(SESSION)
+
+        def slow_abort(fake, handle, text):
+            time.sleep(0.3)
+            self.append(handle, "turn_aborted")
+
+        self.fake.on_keys = slow_abort
+
+        # When
+        with patch.object(refresh, "FOLLOW_UP_SECONDS", 0.2):
+            decided = self.decide(f"{update['questions'][0]['id']}=interrupt")
+
+        # Then
+        self.assertEqual("not_idle_before_deadline", decided["codex_install"]["status"])
+        self.assertEqual([], self.installed_codex())
+
+    def test_선택한_동반_플러그인이_오류이면_설치_작업은_failed로_끝나고_ok가_아니다(self):
+        """term_demo-a: 함께 갱신하는 동반 플러그인이 status error이면 job은 failed와 그 오류 코드로 끝나고 decide 결과도 ok가 아니다."""
+        # Given
+        self.stage_companion(self.cli, "codex", "demo@market", "1.0.0", "1.1.0", new={"manifest_version": "0.0.1"})
+        self.add_session(SESSION, tail=None)
+        with self.commands():
+            update = refresh.command_update(["demo@market"])
+        self.run_id = update["run_id"]
+
+        # When
+        decided = self.decide(f"{update['questions'][0]['id']}=interrupt")
+
+        # Then
+        self.assertEqual(("failed", "plugin_manifest_mismatch"), (decided["codex_install"]["status"], decided["codex_install"]["detail"]))
+        self.assertFalse(decided["ok"])
+
+    def test_Orca가_없어도_세션_밖_롤아웃_질문은_skip과_wait로_답할_수_있다(self):
+        """Orca 실행 파일이 없어도 outside_orca 질문에 skip이나 wait를 답하면 command_missing 없이 처리한다."""
+        # Given
+        write_rollout(self.base / "codex-home", "outside", [{"type": "session_meta", "payload": {"cwd": "/tmp/work"}}, rollout_event("task_started")])
+        update = self.update()
+        question_id = update["questions"][0]["id"]
+        missing = refresh.RefreshError("command_missing", "orca is not installed")
+
+        # When
+        with patch.object(refresh, "Orca", side_effect=missing), self.commands():
+            waited = refresh.command_decide(self.run_id, [f"{question_id}=wait"], spawn=lambda run: self.spawned.append(run) or 4242)
+
+        # Then
+        self.assertEqual("pending", waited["codex_install"]["status"])
+        self.assertEqual([self.run_id], self.spawned)
+
+    def test_Orca가_없어도_skip_답은_받아들여_설치하지_않는다(self):
+        """Orca 실행 파일이 없어도 skip 답은 command_missing 없이 skipped_by_user로 저장된다."""
+        # Given
+        write_rollout(self.base / "codex-home", "outside", [{"type": "session_meta", "payload": {"cwd": "/tmp/work"}}, rollout_event("task_started")])
+        update = self.update()
+        question_id = update["questions"][0]["id"]
+
+        # When
+        with patch.object(refresh, "Orca", side_effect=refresh.RefreshError("command_missing", "orca is not installed")):
+            skipped = refresh.command_decide(self.run_id, [f"{question_id}=skip"], spawn=lambda run: self.spawned.append(run) or 4242)
+
+        # Then
+        self.assertEqual("skipped_by_user", skipped["codex_install"]["status"])
+        self.assertEqual(([], []), (self.spawned, self.installed_codex()))
+
+    def test_설치가_보류된_update는_마켓플레이스_ref를_고치지_않고_설치가_돌_때_커밋으로_고정한다(self):
+        """진행 중 Codex 세션 때문에 설치를 보류한 update는 태그 이름 ref를 그대로 두고, 이후 설치가 실제로 돌 때 그 태그의 커밋으로 고정한다."""
+        # Given
+        config = self.base / "codex-home/config.toml"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text('[marketplaces.hei5enbug]\nsource_type = "git"\nsource = "https://example.com/main.git"\nref = "v1.0.0"\n')
+        self.add_session(SESSION, tail=None)
+
+        # When
+        with patch.object(refresh_codex_release, "remote_tags", return_value={"v1.0.0": "a" * 40, "v1.1.0": "b" * 40}):
+            update = self.update()
+            deferred = refresh_codex_release.read_config()[2]["marketplaces"]["hei5enbug"]["ref"]
+            self.decide(f"{update['questions'][0]['id']}=interrupt")
+        installed = refresh_codex_release.read_config()[2]["marketplaces"]["hei5enbug"]["ref"]
+
+        # Then
+        self.assertEqual("v1.0.0", deferred)
+        self.assertEqual("b" * 40, installed)
+
+
+class DeferredResumeApprovalTest(CodexCase):
+    def test_차례가_끝난_뒤_입력줄에_글이_남아_한도까지_재개하지_못하면_재개_승인_대상으로_보고한다(self):
+        """term_demo-a: 미룬 resume이 한도까지 unsent_input으로 끝나면 detail은 codex_plugin_folder_replaced, resume_check는 unsent_input이고 resume_approval_needed가 붙는다."""
+        # Given
+        self.add_session(SESSION)
+        self.append(SESSION, "agent_message")
+        self.fake.screens[SESSION] = CODEX_EMPTY[:2] + ["› 쓰다 만 요청"] + CODEX_EMPTY[3:]
+        result = self.apply()
+        self.after(0.1, lambda: self.append(SESSION, "task_complete"))
+
+        # When
+        with patch.object(refresh, "FOLLOW_UP_SECONDS", 0.6):
+            status = self.helper()
+
+        # Then
+        final = self.view(status)
+        self.assertEqual("deferred", self.view(result)["status"])
+        self.assertEqual(("skipped", "codex_plugin_folder_replaced", "unsent_input", True),
+                         (final["status"], final["detail"], final["resume_check"], final["resume_approval_needed"]))
+        self.assertEqual([], self.sent())
 
 
 if __name__ == "__main__":

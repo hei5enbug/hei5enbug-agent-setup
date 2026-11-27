@@ -60,8 +60,10 @@ assume-unchanged로 표시한 추적 파일이 없고, HEAD가 공식 저장소�
 가드가 신뢰되지 않았음을 발견했을 때 이렇게 한다. 마켓플레이스의 `ref`가 주석 태그 이름이면 설치 표식의 revision이
 태그가 가리키는 커밋이므로 Codex가 시작할 때마다 플러그인을 재설치해 신뢰가 초기화된다. 따라서 `orca-plugin-refresh`는
 Git 마켓플레이스의 `ref`를 태그 이름 대신 그 커밋으로 고정한다. 그러면 Codex가 한 번 재설치한 뒤 멈춰 기록된 신뢰가 유지된다.
-Claude Code 프롬프트는 이 플러그인의 Codex 설치 폴더가 마지막 재신뢰 뒤 기록된 폴더와 다르면 같은 재신뢰를 분리 실행한다
-(`python3 scripts/codex_hook_trust.py heal`로 수동 실행 가능). 이 검사는 파일 메타데이터만 읽고 프롬프트를 지연하거나
+Claude Code 프롬프트는 Codex `config.toml`의 마켓플레이스 `ref`가 전체 커밋이고 이 플러그인의 Codex 설치 폴더가
+마지막 재신뢰 뒤 기록된 폴더와 다를 때만 같은 재신뢰를 분리 실행한다
+(`python3 scripts/codex_hook_trust.py heal`로 수동 실행 가능). `ref`가 태그 이름이면 Codex 시작 시 플러그인을
+재설치하므로 아무것도 실행하지 않는다. 이 검사는 파일 메타데이터만 읽고 프롬프트를 지연하거나
 내용을 출력하지 않으며, `$XDG_STATE_HOME/hei5enbug-agent-setup/codex-trust/` 아래 잠금으로 재신뢰가 한 번에 하나만 실행된다.
 재신뢰가 실패하면 같은 폴더는 최대 10분에 한 번 재시도한다. 재신뢰는 `codex app-server`의 `config/value/write` 메서드로
 각 훅의 현재 해시를 기록하고 `hooks/list`로 확인한다. 두 부분 해시는 Codex의 `/hooks`가 저장하는 것처럼 훅 부분을

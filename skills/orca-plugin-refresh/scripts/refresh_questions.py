@@ -16,7 +16,7 @@ def options_for(entry: dict) -> list[dict]:
     """The three answers to a question and what each would do, in one English sentence built from the entry."""
     commands = command_list(entry.get("actions") or [])
     reason, background = entry["ask"], entry.get("background")
-    if reason == "input_not_restorable":
+    if reason == "input_not_restorable" or entry.get("input_unrestorable"):
         wait = (f"Nothing is typed now. The helper sends {commands} once the input line is empty or holds text it can restore "
                 "exactly, and skips the session when the line does not change within one hour.")
     else:
@@ -38,7 +38,8 @@ def question_record(question_id: str, entry: dict) -> dict:
     """The saved question for one session that ended its pass as `awaiting_answer`; `handle` stays in the run state only."""
     return {"id": question_id, "handle": entry["handle"], "terminal": f"…{entry['handle'][-6:]}", "host": entry["host"],
             "worktree": entry.get("worktree"), "title": entry.get("title"), "reason": entry["ask"],
-            "background": entry.get("background"), "options": options_for(entry), "answer": None}
+            "background": entry.get("background"), "options": options_for(entry), "answer": None,
+            "session": entry.get("asked_transcript"), "input_unrestorable": bool(entry.get("input_unrestorable"))}
 
 
 def codex_options(session: dict) -> list[dict]:

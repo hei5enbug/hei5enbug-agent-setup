@@ -13,7 +13,8 @@ from refresh_dialog import answer_compact_dialog, dialog_open
 from refresh_host_record import COMMAND_RECORD_PREFIXES, TRANSCRIPT_TAIL_BYTES, background_pending, record_state
 from refresh_orca import Orca
 from refresh_outcome import (
-    CLAUDE_COMPACT_ERROR, CLAUDE_COMPACTED, CLAUDE_NOTHING_TO_COMPACT, CODEX_COMPACTED, RELOAD_DONE, RELOAD_REFUSED, last_item_is,
+    CLAUDE_COMPACT_ERROR, CLAUDE_COMPACTED, CLAUDE_NOTHING_TO_COMPACT, CODEX_COMPACTED, COMMANDS, RELOAD_DONE, RELOAD_REFUSED, claude_has_prompts,
+    last_item_is,
     result_counts, transcript_outcome, transcript_records, transcript_size,
 )
 from refresh_process import session_process_present, session_release
@@ -21,7 +22,6 @@ from refresh_reload import judge_reload, reload_may_need_force, screen_report
 from refresh_screen import composer_bounds, input_state, codex_fresh, screen_host
 
 
-COMMANDS = {"reload": "/reload-plugins", "compact": "/compact", "clear": "/clear"}
 CLEAR_TIMEOUT = 60.0
 PROBE_KEY = "x"
 DRAFT_STABLE_SECONDS = 5.0
@@ -513,28 +513,6 @@ def release_held(orca: Orca, entry: dict) -> bool:
     return True
 
 
-def claude_has_prompts(path: object) -> bool:
-    """True unless the transcript proves the user never sent a prompt, so /clear cannot lose a conversation."""
-    if not isinstance(path, str) or not Path(path).is_file():
-        return True
-    if Path(path).stat().st_size > TRANSCRIPT_TAIL_BYTES:
-        return True
-    for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            return True
-        message = record.get("message") if isinstance(record, dict) and record.get("type") == "user" else None
-        content = message.get("content") if isinstance(message, dict) else None
-        if isinstance(content, str):
-            text = content.strip()
-            if text not in COMMANDS.values() and not text.startswith(COMMAND_RECORD_PREFIXES):
-                return True
-        elif isinstance(content, list) and any(isinstance(part, dict) and part.get("type") == "text" for part in content):
-            return True
-    return False
-
-
 def newer_marker(entry: dict, marker: dict | None, target: dict) -> bool:
     """True only for a marker rewritten after the command was sent that carries the target instructions."""
     if not marker or marker == entry.get("marker_snapshot") or marker.get("digest") != target.get("digest"):
@@ -610,11 +588,22 @@ def ask(entry: dict, reason: str) -> None:
     """End the entry's pass without typing: the user decides whether applying now could disturb the session."""
     path = (read_marker(entry["handle"]) or {}).get("transcript_path")
     entry.pop("turn_unreadable", None)
-    entry.update(status="awaiting_answer", detail=reason, ask=reason, background=background_pending(path))
+    entry.update(status="awaiting_answer", detail=reason, ask=reason, background=background_pending(path), asked_transcript=path)
 
 
 def queue_mode(entry: dict) -> bool:
     return bool(entry.get("queueable")) and entry["host"] == "claude" and "clear" not in entry["actions"]
+
+
+def asked(orca: Orca, entry: dict, reason: str, lines: list[str]) -> tuple[str, list[str]]:
+    """`ask`, after marking a draft that cannot be typed back exactly so that a later `wait` never clears it."""
+    try:
+        draft = orca.draft(entry["handle"])
+    except RefreshError:
+        draft = None
+    entry["input_unrestorable"] = isinstance(draft, str) and bool(draft.strip()) and not restorable_text(draft)
+    ask(entry, reason)
+    return "awaiting_answer", lines
 
 
 def queue_gate(orca: Orca, entry: dict, target: dict) -> tuple[str | None, list[str]]:
@@ -625,28 +614,40 @@ def queue_gate(orca: Orca, entry: dict, target: dict) -> tuple[str | None, list[
         return "busy", []
     entry.pop("turn_unreadable", None)
     if "reload" in entry["actions"] and reload_may_need_force(target, read_marker(entry["handle"])):
-        ask(entry, "reload_needs_force")
-        return "awaiting_answer", []
-    reason, lines = input_ready(orca, entry, known_text=True)
+        return asked(orca, entry, "reload_needs_force", [])
+    try:
+        reason, lines = input_ready(orca, entry, known_text=True)
+    except RefreshError:
+        return asked(orca, entry, "state_unreadable", [])
     if reason == "orchestration_mail_pending":
-        ask(entry, reason)
-    elif reason == "input_unknown":
-        ask(entry, "dialog_open" if dialog_open(lines) else "state_unreadable")
-    elif reason == "unsent_input" and not entry.get("input_restorable"):
-        ask(entry, "input_not_restorable")
-    else:
-        return reason, lines
-    return "awaiting_answer", lines
+        return asked(orca, entry, reason, lines)
+    if reason == "input_unknown":
+        return asked(orca, entry, "dialog_open" if dialog_open(lines) else "state_unreadable", lines)
+    if reason == "unsent_input" and not entry.get("input_restorable"):
+        return asked(orca, entry, "input_not_restorable", lines)
+    return reason, lines
+
+
+def queue_clear(orca: Orca, entry: dict) -> bool:
+    """True while no dialog is open and the input line holds nothing new, checked before each later queued command."""
+    try:
+        lines, draft = orca.screen(entry["handle"])
+    except RefreshError:
+        return False
+    return not dialog_open(lines) and not (isinstance(draft, str) and draft.strip() and draft != entry.get("observed_draft"))
 
 
 def send_queued(orca: Orca, entry: dict, marker: dict | None) -> None:
     """Type each action's command into a session whose turn is in progress, where Claude Code queues it, then give any
-    held input back at once. The entry waits for the helper to confirm the commands from the transcript."""
+    held input back at once. A dialog or new input that appears between commands stops the typing; the commands not
+    typed stay in `actions` for the ordinary path once the turn ends. The entry waits for the helper to confirm them."""
     entry["queue_transcript"] = (marker or {}).get("transcript_path")
     entry["queue_offset"] = transcript_size(entry["queue_transcript"])
     entry["queued_at"] = time.time()
     entry["queued"] = []
-    for action in entry["actions"]:
+    for index, action in enumerate(entry["actions"]):
+        if index and not queue_clear(orca, entry):
+            break
         orca.send(entry["handle"], COMMANDS[action])
         entry["queued"].append(action)
     entry.update(status="deferred", detail="commands_queued")

@@ -88,6 +88,14 @@ def git_top_level(start: Path) -> Path | None:
     return None
 
 
+def has_file(path: Path) -> bool:
+    """Whether the path is a file; an entry that cannot be inspected counts as absent."""
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def is_jvm_workspace(cwd: str) -> bool:
     """Whether the folder itself or its Git top level holds a Gradle or Maven build file."""
     try:
@@ -96,7 +104,7 @@ def is_jvm_workspace(cwd: str) -> bool:
         return False
     top = git_top_level(start)
     folders = (start,) if top is None or top == start else (start, top)
-    return any((folder / name).is_file() for folder in folders for name in JVM_BUILD_FILES)
+    return any(has_file(folder / name) for folder in folders for name in JVM_BUILD_FILES)
 
 
 def configured_estimate(key: str, default: int) -> int:

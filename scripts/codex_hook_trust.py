@@ -14,12 +14,14 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import tomllib
 from pathlib import Path
 from typing import Sequence
 
@@ -39,6 +41,7 @@ LOCK_FILE = "retrust.lock"
 STAMP_FILE = "retrust.json"
 RETRUST_RETRY_SECONDS = 600
 RETRUST_TIMEOUT_SECONDS = 60
+FULL_COMMIT = re.compile(r"[0-9a-f]{40}")
 
 
 class TrustError(Exception):
@@ -70,9 +73,11 @@ def plugin_root(hooks: Sequence[dict]) -> Path:
     return roots.pop()
 
 
-def _git(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> subprocess.CompletedProcess:
+def _git(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS, ceiling: Path | None = None) -> subprocess.CompletedProcess:
     environment = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
     environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", LC_ALL="C")
+    if ceiling is not None:
+        environment["GIT_CEILING_DIRECTORIES"] = str(ceiling)
     try:
         return subprocess.run(
             ["git", "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "--no-optional-locks", "-C", str(root),
@@ -84,18 +89,24 @@ def _git(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> subpro
         raise TrustError(f"git could not run: {error}") from error
 
 
-def _git_output(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> str:
-    completed = _git(root, *args, timeout=timeout)
+def _git_output(root: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS, ceiling: Path | None = None) -> str:
+    completed = _git(root, *args, timeout=timeout, ceiling=ceiling)
     if completed.returncode != 0:
         raise TrustError(f"git {args[0]} failed in {root}")
     return completed.stdout
 
 
-def advertised(root: Path) -> tuple[str | None, set[str]]:
-    """The commit the official remote advertises now for `main`, and the commits its `v*` tags point to, peeled."""
+def advertised() -> tuple[str | None, set[str]]:
+    """The commit the official remote advertises now for `main`, and the commits its `v*` tags point to, peeled.
+
+    Runs from an empty scratch folder with system and global Git configuration off, so no checkout's own configuration,
+    such as a URL rewrite, can change which remote answers."""
     tags: dict[str, str] = {}
     main = None
-    for line in _git_output(root, "ls-remote", "--", OFFICIAL_URL, MAIN, TAGS, timeout=NETWORK_TIMEOUT_SECONDS).splitlines():
+    with tempfile.TemporaryDirectory(prefix="codex-hook-trust-") as scratch:
+        listing = _git_output(Path(scratch), "ls-remote", "--", OFFICIAL_URL, MAIN, TAGS, timeout=NETWORK_TIMEOUT_SECONDS,
+                              ceiling=Path(scratch).parent)
+    for line in listing.splitlines():
         commit, _, ref = line.partition("\t")
         if ref == MAIN:
             main = commit
@@ -140,7 +151,7 @@ def verify_checkout(root: Path) -> None:
     if flagged:
         raise TrustError("the installed copy marks tracked files skip-worktree or assume-unchanged, which hides local edits")
     head = _git_output(root, "rev-parse", "--verify", "HEAD^{commit}").strip()
-    main, released = advertised(root)
+    main, released = advertised()
     if head == main or head in released:
         return
     if main is None or not on_official_main(root, head):
@@ -262,21 +273,36 @@ def install_folder(home: Path | None = None) -> Path:
 
 
 def install_identity(folder: Path) -> str | None:
-    """A digest of what Codex's install of this plugin looks like: each version folder's name, device, inode, modification
-    time, and install marker text. Codex replaces the folder on every reinstall, so any reinstall changes it. Reads only
-    file metadata and the marker; None when the folder is absent or unreadable."""
+    """A digest of what Codex's install of this plugin looks like: each version folder's name, device, inode, and
+    modification time, and its install marker's inode, size, and modification time. Codex replaces the folder on every
+    reinstall, so any reinstall changes it. Reads file metadata only; None when the folder is absent or unreadable."""
     try:
         records = []
         for version in sorted(entry for entry in folder.iterdir() if entry.is_dir()):
             info = version.stat()
             try:
-                marker = (version / INSTALL_MARKER).read_text(encoding="utf-8")
+                marker = (version / INSTALL_MARKER).stat()
+                marker_record = [marker.st_ino, marker.st_size, marker.st_mtime_ns]
             except OSError:
-                marker = ""
-            records.append([version.name, info.st_dev, info.st_ino, info.st_mtime_ns, marker])
+                marker_record = []
+            records.append([version.name, info.st_dev, info.st_ino, info.st_mtime_ns, marker_record])
     except OSError:
         return None
     return hashlib.sha256(json.dumps(records).encode("utf-8")).hexdigest() if records else None
+
+
+def pinned_to_commit(home: Path | None = None) -> bool:
+    """Whether this plugin's Codex marketplace `ref` is a full commit. A tag-name ref makes a Codex start reinstall the
+    plugin, so a re-trust that starts Codex then would disturb running sessions."""
+    base = home or Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    try:
+        data = tomllib.loads((base / "config.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    marketplaces = data.get("marketplaces")
+    entry = marketplaces.get(MARKETPLACE) if isinstance(marketplaces, dict) else None
+    ref = entry.get("ref") if isinstance(entry, dict) else None
+    return isinstance(ref, str) and FULL_COMMIT.fullmatch(ref) is not None
 
 
 def read_stamp(path: Path) -> dict:
@@ -312,9 +338,11 @@ def retrust_due(folder: Path, stamp: Path, now: float) -> bool:
 def start_retrust_if_due(script: Path | None = None, now: float | None = None) -> bool:
     """Start one detached re-trust when the install folder changed and none holds the lock; return at once either way.
 
-    The check reads file metadata only. The lock is taken here and handed to the child, so two prompts never start two."""
+    Starts nothing unless the marketplace ref is a full commit. The check reads file metadata only. The lock is taken
+    here and handed to the child, so two prompts never start two, and the stamp is checked again under the lock."""
     state = state_folder()
-    if not retrust_due(install_folder(), state / STAMP_FILE, time.time() if now is None else now):
+    moment = time.time() if now is None else now
+    if not pinned_to_commit() or not retrust_due(install_folder(), state / STAMP_FILE, moment):
         return False
     state.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(state / LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o600)
@@ -322,6 +350,8 @@ def start_retrust_if_due(script: Path | None = None, now: float | None = None) -
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
+            return False
+        if not retrust_due(install_folder(), state / STAMP_FILE, moment):
             return False
         subprocess.Popen(
             [sys.executable, str(script or Path(__file__).resolve()), "heal", "--lock-fd", str(descriptor)],
@@ -335,7 +365,8 @@ def start_retrust_if_due(script: Path | None = None, now: float | None = None) -
 
 def retrust(lock_fd: int | None = None, command: Sequence[str] | None = None, env: dict | None = None) -> str | None:
     """Trust this plugin's untrusted hooks from the verified official copy Codex installed, under the re-trust lock, and
-    stamp the install folder as it is afterwards. Return None on success, otherwise why nothing was trusted."""
+    stamp the install folder only when it is the same before and after the check. Return None on success, otherwise why
+    nothing was trusted."""
     state = state_folder()
     state.mkdir(parents=True, exist_ok=True)
     descriptor = lock_fd
@@ -347,8 +378,11 @@ def retrust(lock_fd: int | None = None, command: Sequence[str] | None = None, en
             os.close(descriptor)
             return "another re-trust is running"
     try:
+        if not pinned_to_commit():
+            return "the Codex marketplace ref is not a full commit, so starting Codex could reinstall the plugin"
         folder = install_folder()
-        if install_identity(folder) is None:
+        before = install_identity(folder)
+        if before is None:
             return "no Codex install folder of this plugin"
         argv = list(command) if command else ["codex", "app-server"]
         environment = dict(os.environ) if env is None else env
@@ -361,9 +395,8 @@ def retrust(lock_fd: int | None = None, command: Sequence[str] | None = None, en
             reason = None
         except TrustError as error:
             reason = str(error)
-        identity = install_identity(folder)
-        if identity is not None:
-            write_stamp(state / STAMP_FILE, identity, reason is None, time.time())
+        if install_identity(folder) == before:
+            write_stamp(state / STAMP_FILE, before, reason is None, time.time())
         return reason
     finally:
         os.close(descriptor)

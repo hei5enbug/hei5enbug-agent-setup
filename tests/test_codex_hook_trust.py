@@ -87,6 +87,11 @@ def fake_server(tmp_path, hooks, reject=False):
     return [str(script)], env, log
 
 
+def pin_marketplace(codex_home, ref):
+    codex_home.mkdir(parents=True, exist_ok=True)
+    (codex_home / "config.toml").write_text(f'[marketplaces.{trust.MARKETPLACE}]\nref = "{ref}"\n', encoding="utf-8")
+
+
 def test_공식_저장소의_깨끗한_설치본은_검증을_통과한다(installed):
     # given
     root = installed
@@ -241,6 +246,7 @@ def retrust_env(installed, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    pin_marketplace(tmp_path / "codex-home", "a" * 40)
     return installed
 
 
@@ -305,3 +311,127 @@ def test_다른_재신뢰가_잠금을_잡고_있으면_아무것도_하지_않�
     assert reason == "another re-trust is running"
     assert not log.exists()
     assert not (state / trust.STAMP_FILE).exists()
+
+
+@pytest.mark.parametrize("ref", ["v1.0.0", "a" * 39, "A" * 40, None])
+def test_마켓플레이스_ref가_전체_커밋이_아니면_재신뢰는_Codex를_시작하지_않는다(retrust_env, tmp_path, ref):
+    """마켓플레이스 ref가 태그 이름이거나 40자리 커밋이 아니면 프롬프트 재신뢰는 시작도 실행도 하지 않는다."""
+    # given
+    codex_home = tmp_path / "codex-home"
+    if ref is None:
+        (codex_home / "config.toml").write_text("", encoding="utf-8")
+    else:
+        pin_marketplace(codex_home, ref)
+    command, env, log = fake_server(tmp_path, [hook(retrust_env)])
+    # when
+    started = trust.start_retrust_if_due(script=tmp_path / "missing.py")
+    reason = trust.retrust(command=command, env=env)
+    # then
+    assert started is False
+    assert reason
+    assert not log.exists()
+    assert not (trust.state_folder() / trust.STAMP_FILE).exists()
+
+
+def test_공식_원격_조회는_확인_중인_저장소의_로컬_url_재작성에_영향받지_않는다(installed, official, tmp_path):
+    """확인 대상 저장소의 로컬 url insteadOf 설정이 있어도 공식 원격이 광고하는 ref를 그대로 읽는다."""
+    # given
+    decoy = tmp_path / "decoy"
+    (decoy / "hooks").mkdir(parents=True)
+    (decoy / "hooks" / "hooks.json").write_text('{"decoy": true}\n')
+    git(decoy, "init", "-q", "-b", "main")
+    git(decoy, "add", ".")
+    git(decoy, "commit", "-q", "-m", "decoy")
+    git(installed, "config", f"url.{decoy.as_uri()}.insteadOf", official.as_uri())
+    expected = git(official, "rev-parse", "refs/heads/main")
+    # when
+    main, released = trust.advertised()
+    # then
+    assert main == expected
+    assert git(decoy, "rev-parse", "refs/heads/main") != expected
+    assert released == {git(official, "rev-parse", "v1.0.0")}
+
+
+def test_재신뢰는_목록을_읽기_전의_설치_신원을_기록해_도중에_바뀌면_성공을_기록하지_않는다(retrust_env, tmp_path, monkeypatch):
+    """훅 목록을 읽는 사이 설치 폴더가 바뀌면 성공 기록을 남기지 않아 다음 프롬프트가 다시 확인한다."""
+    # given
+    command, env, log = fake_server(tmp_path, [hook(retrust_env)])
+    folder, stamp = trust.install_folder(), trust.state_folder() / trust.STAMP_FILE
+    real_calls = trust.app_server_calls
+    swapped = []
+
+    def swapping(*arguments):
+        result = real_calls(*arguments)
+        if not swapped:
+            swapped.append((folder / "2.0.0").mkdir())
+        return result
+
+    monkeypatch.setattr(trust, "app_server_calls", swapping)
+    # when
+    reason = trust.retrust(command=command, env=env)
+    # then
+    assert reason is None
+    assert not stamp.exists()
+    assert trust.retrust_due(folder, stamp, 0.0) is True
+
+
+def test_프롬프트_확인은_설치_마커의_내용을_읽지_않고_손상되거나_읽을_수_없어도_예외_없이_판단한다(retrust_env, monkeypatch):
+    """프롬프트 시점 확인은 마커의 메타데이터만 보므로 내용이 손상돼도 변경을 감지하고, 마커나 폴더를 못 읽어도 예외 없이 시작하지 않는다."""
+    # given
+    if os.geteuid() == 0:
+        pytest.skip("root ignores file modes")
+    marker = retrust_env / trust.INSTALL_MARKER
+    folder, stamp = trust.install_folder(), trust.state_folder() / trust.STAMP_FILE
+    stamp.parent.mkdir(parents=True)
+    trust.write_stamp(stamp, trust.install_identity(folder), True, 0.0)
+    marker.write_bytes(b"\xff\xfe\x00broken-marker-with-new-size")
+    reads = []
+    real_read_text = Path.read_text
+
+    def tracked(self, *arguments, **options):
+        reads.append(self.name)
+        return real_read_text(self, *arguments, **options)
+
+    monkeypatch.setattr(Path, "read_text", tracked)
+    # when
+    changed = trust.retrust_due(folder, stamp, 1.0)
+    retrust_env.chmod(0)
+    try:
+        unreadable_version = trust.retrust_due(folder, stamp, 1.0)
+    finally:
+        retrust_env.chmod(0o755)
+    folder.chmod(0)
+    try:
+        unreadable_folder = trust.retrust_due(folder, stamp, 1.0)
+    finally:
+        folder.chmod(0o755)
+    # then
+    assert changed is True
+    assert trust.INSTALL_MARKER not in reads
+    assert unreadable_folder is False
+    assert unreadable_version in {True, False}
+
+
+def test_잠금을_얻은_뒤_이미_다른_재신뢰가_성공했으면_다시_시작하지_않는다(retrust_env, tmp_path, monkeypatch):
+    """두 프롬프트가 같은 설치를 보고 하나가 먼저 재신뢰를 끝내면, 잠금을 얻은 나머지는 기록을 다시 확인해 시작하지 않는다."""
+    # given
+    folder, stamp = trust.install_folder(), trust.state_folder() / trust.STAMP_FILE
+    real_due = trust.retrust_due
+    calls = []
+
+    def stale_then_real(*arguments):
+        calls.append(1)
+        if len(calls) == 1:
+            return True
+        return real_due(*arguments)
+
+    monkeypatch.setattr(trust, "retrust_due", stale_then_real)
+    stamp.parent.mkdir(parents=True)
+    trust.write_stamp(stamp, trust.install_identity(folder), True, 0.0)
+    starts = []
+    monkeypatch.setattr(trust.subprocess, "Popen", lambda *arguments, **options: starts.append(arguments))
+    # when
+    started = trust.start_retrust_if_due(script=tmp_path / "heal.py")
+    # then
+    assert started is False
+    assert starts == []

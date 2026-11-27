@@ -348,8 +348,15 @@ def result_text(content: object) -> str:
     )
 
 
+def is_final_report_result(value: dict) -> bool:
+    """Whether a printed result is a final-report review result or a passing `check` result, which has no stage or kind."""
+    if value.get("stage") == "review" and value.get("kind") == FINAL_REPORT_KIND:
+        return True
+    return "stage" not in value and "kind" not in value and value.get("findings") == []
+
+
 def review_result_digest(text: str) -> str | None:
-    """Return the digest of the last final-report review result printed in a Bash result, or None."""
+    """Return the digest of the last final-report review or check result printed in a Bash result, or None."""
     decoder = json.JSONDecoder()
     digest = None
     index = text.find("{")
@@ -361,8 +368,7 @@ def review_result_digest(text: str) -> str | None:
             continue
         if (
             isinstance(value, dict)
-            and value.get("stage") == "review"
-            and value.get("kind") == FINAL_REPORT_KIND
+            and is_final_report_result(value)
             and isinstance(value.get(DIGEST_KEY), str)
             and DIGEST_HEX.fullmatch(value[DIGEST_KEY])
         ):

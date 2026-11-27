@@ -34,8 +34,11 @@ def alive(pid: object) -> bool:
 
 def handled(state: dict, handle: str) -> str | None:
     """The status a session already reached in this run, ignoring a queue whose helper never ran or died."""
-    status = state.get("sessions", {}).get(handle, {}).get("status")
-    if status == "done":
+    saved = state.get("sessions", {}).get(handle, {})
+    status = saved.get("status")
+    if status == "done" or (status == "skipped" and saved.get("detail") == "skipped_by_user"):
+        return status
+    if status == "awaiting_answer" and any(item.get("handle") == handle and not item.get("answer") for item in state.get("questions", {}).values()):
         return status
     if status == "queued_after_turn":
         own = state.get("self") or {}
@@ -85,13 +88,14 @@ def follow_item(entry: dict, mode: str, handed: float) -> dict:
     return ({key: entry.get(key) for key in ("handle", "host", "actions", "planned", "title", "worktree", "compact_reason", "detail", "probe_retries",
                                              "screen_identified", "input", "ready_signal", "release", "host_release_outdated", "orphaned")}
             | {key: entry[key] for key in ("completed", "note", "compact_after_resume", "queued", "queued_at", "queue_transcript", "queue_offset",
-                                           "keep_unrestorable_input") if entry.get(key)}
+                                           "keep_unrestorable_input", "owes_continue", "compact_while_owing") if entry.get(key)}
             | {"compact_mode": mode, "deferred_at": entry.get("queued_at", handed) if queued else handed, **point})
 
 
 def add_questions(state: dict, entries: list[dict]) -> list[dict]:
-    """Save one question for each session that is `awaiting_answer`, replacing its unanswered earlier one."""
-    asked = [entry for entry in entries if entry["status"] == "awaiting_answer"]
+    """Save one question for each session that is `awaiting_answer`, replacing its unanswered earlier one; a session
+    already waiting for its answer in this run keeps its question, which is returned again with the new ones."""
+    asked = [entry for entry in entries if entry["status"] == "awaiting_answer" and not entry.get("handled")]
     questions = state.setdefault("questions", {})
     for question_id in [key for key, item in questions.items() if not item.get("answer") and item["handle"] in {entry["handle"] for entry in asked}]:
         del questions[question_id]
@@ -100,4 +104,5 @@ def add_questions(state: dict, entries: list[dict]) -> list[dict]:
         state["question_seq"] = state.get("question_seq", 0) + 1
         questions[f"q{state['question_seq']}"] = created_item = question_record(f"q{state['question_seq']}", entry)
         created.append(created_item)
-    return created
+    waiting = {entry["handle"] for entry in entries if entry["status"] == "awaiting_answer" and entry.get("handled")}
+    return [*(item for item in questions.values() if item["handle"] in waiting and not item.get("answer")), *created]

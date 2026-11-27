@@ -7,7 +7,7 @@ from refresh_interrupt import interrupt_apply
 from refresh_orca import Orca
 from refresh_process import ProcessOs
 from refresh_questions import CHOICES, CODEX_INSTALL
-from refresh_sessions import plan_sessions
+from refresh_sessions import plan_sessions, read_marker
 
 
 def parse_answers(answers: Sequence[str]) -> list[tuple[str, str]]:
@@ -34,7 +34,10 @@ def decided_entry(orca: Orca, state: dict, question: dict, choice: str, system: 
     if entry["status"] != "pending":
         return entry
     if choice == "wait":
-        entry.update(status="deferred", detail="waiting_for_idle", keep_unrestorable_input=question["reason"] == "input_not_restorable")
+        entry.update(status="deferred", detail="waiting_for_idle", keep_unrestorable_input=(
+            question["reason"] == "input_not_restorable" or bool(question.get("input_unrestorable"))))
+    elif "session" in question and question["session"] != (read_marker(handle) or {}).get("transcript_path"):
+        entry.update(status="failed", detail="session_replaced", actions=[])
     else:
         interrupt_apply(orca, entry, state, system, sleep)
     return entry
@@ -45,6 +48,8 @@ def checked_codex_answers(known: dict, parsed: list[tuple[str, str]]) -> None:
     for question_id, choice in parsed:
         if choice not in [option["choice"] for option in known[question_id].get("options", [])]:
             raise RefreshError("answer_invalid", f"Question {question_id} does not offer {choice}.")
+    if "skip" not in {choice for _, choice in parsed} and any(not known[question_id].get("rollout") for question_id, _ in parsed):
+        raise RefreshError("rollout_unknown", "The Codex rollout of a session is unknown, so it is unknown when its turn ends; answer skip, or run the update again from a session whose rollout is known.")
     open_ids = {key for key, item in known.items() if item.get("reason") == CODEX_INSTALL and not item.get("answer")}
     if open_ids - {question_id for question_id, _ in parsed}:
         raise RefreshError("answers_incomplete", "Answer every Codex install question in the same decide call.")

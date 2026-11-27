@@ -1,5 +1,6 @@
 """요청 예산 항목 3: 시드한 계수기로 구한 병렬 한도와 기계 전체의 실행 목록."""
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -231,6 +232,28 @@ def test_폴더_자체에_pom이_있으면_Git_최상위가_아니어도_JVM_작
     # then
     assert estimates == [1536, 1536]
     assert limit(memory_mb=4096, run_mib=estimates[0]) == 2
+
+
+def test_읽을_수_없는_빌드_파일_항목은_없는_것으로_보고_다른_빌드_파일을_계속_찾는다(tmp_path):
+    """접근할 수 없는 build.gradle 링크가 있어도 예외 없이 다음 항목을 확인해 pom.xml 이 있으면 1536MiB로 센다."""
+    # given
+    if os.geteuid() == 0:
+        pytest.skip("root ignores file modes")
+    folder = make_workspace(tmp_path, "pom.xml", in_folder=True)
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    (locked / "target").write_text("", encoding="utf-8")
+    (folder / "build.gradle").symlink_to(locked / "target")
+    locked.chmod(0)
+
+    # when
+    try:
+        estimate = pl.run_memory_mib(str(folder))
+    finally:
+        locked.chmod(0o755)
+
+    # then
+    assert estimate == 1536
 
 
 def test_JVM_빌드_파일이_없으면_실행_하나는_512MiB로_세어_메모리_항이_8이다(tmp_path):

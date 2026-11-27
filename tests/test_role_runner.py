@@ -79,7 +79,7 @@ def guard_hook(cwd):
         "matcher": config.get("hooks_matcher", "^(Bash|Read|Edit|Write)$"), "timeoutSec": 10, "source": "plugin",
         "pluginId": "plugin@market", "enabled": config.get("hooks_enabled", True),
         "isManaged": config.get("hooks_managed", False), "currentHash": "sha256:x",
-        "trustStatus": config.get("hooks_trust", "trusted"),
+        "trustStatus": config.get("hooks_trust_after_exec") if config.get("hooks_trust_after_exec") and os.path.exists(os.environ["FAKE_LOG"] + ".ran") else config.get("hooks_trust", "trusted"),
     }}
 
 
@@ -102,7 +102,10 @@ def serve_hooks():
                 sys.stdout.buffer.write(b"\\xff\\xfe\\n")
                 sys.stdout.flush()
                 continue
-            if config.get("hooks_error"):
+            lists = os.environ["FAKE_LOG"] + ".lists"
+            with open(lists, "a") as counter:
+                counter.write("x")
+            if config.get("hooks_error") or (config.get("hooks_error_from") and len(open(lists).read()) >= config["hooks_error_from"]):
                 print(json.dumps({{"id": request["id"], "error": {{"code": -32600, "message": "bad request"}}}}), flush=True)
                 continue
             cwd = request["params"]["cwds"][0]
@@ -147,6 +150,8 @@ if config.get("exit"):
     sys.exit(config["exit"])
 if name == "codex":
     argv = sys.argv[1:]
+    if config.get("hooks_trust_after_exec"):
+        Path(os.environ["FAKE_LOG"] + ".ran").touch()
     sandbox = argv[argv.index("-s") + 1] if "-s" in argv else next(
         (item.split("=", 1)[1].strip('"') for item in argv if item.startswith("sandbox_mode=")), None)
     if scratch is not None:
@@ -2524,6 +2529,50 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertFalse(self.result.exists())
         self.assertFalse(self.status(completed)["verified"])
 
+    def test_하트비트_원인_확인이_실패해도_하트비트_경로와_원인_확인_오류를_증거에_남긴다(self):
+        """쓰기 실행에서 하트비트가 없고 이어진 hooks/list가 거부되면 종료 코드 4와 하트비트 경로를 유지하고 거부 사유를 hooks_error로 남긴다."""
+        # Given
+        config = {"no_heartbeat": True, "hooks_error_from": 2}
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", str(self.base), config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        evidence = self.status(completed)["evidence"]
+        self.assertTrue(evidence["heartbeat"].endswith(".PreToolUse"))
+        self.assertIn(evidence["heartbeat"], completed.stderr)
+        self.assertIn("rejected hooks/list", evidence["hooks_error"])
+
+    def test_신뢰되고_켜진_훅의_matcher_불일치는_원인_불명이고_hooks_신뢰_안내를_하지_않는다(self):
+        """훅이 trusted이고 enabled인데 matcher가 셸을 덮지 않아 하트비트가 없으면 원인은 unknown이고 /hooks 안내 없이 훅 상태를 증거로 남긴다."""
+        # Given
+        config = {"no_heartbeat": True, "hooks_matcher": "^Agent$"}
+
+        # When
+        completed = self.run_runner("worker", "--add-dir", str(self.base), config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        evidence = self.status(completed)["evidence"]
+        self.assertEqual("unknown", evidence["cause"])
+        self.assertNotIn("/hooks", completed.stderr)
+        self.assertEqual(["^Agent$"], [hook["matcher"] for hook in evidence["hooks"]])
+
+    def test_읽기_전용_실행은_실행_뒤에_새로_읽은_hooks_목록으로_하트비트_원인을_설명한다(self):
+        """읽기 전용 실행 중에 훅이 untrusted로 바뀌어 하트비트가 없으면 실행 전 목록이 아닌 실행 뒤 목록으로 untrusted 원인과 /hooks 안내를 낸다."""
+        # Given
+        config = {"no_heartbeat": True, "hooks_trust": "trusted", "hooks_trust_after_exec": "untrusted"}
+
+        # When
+        completed = self.run_runner("scout", config=config)
+
+        # Then
+        self.assertEqual(4, completed.returncode)
+        evidence = self.status(completed)["evidence"]
+        self.assertEqual("untrusted", evidence["cause"])
+        self.assertIn("/hooks", completed.stderr)
+
     def test_승인_가드_스위치_변수는_Codex와_Claude_자식_환경에서_빠지고_나머지_변수는_그대로_전달된다(self):
         """부모 환경의 두 가드 스위치 변수는 Codex(목록·점검·exec)와 Claude 자식 어디에도 전달되지 않고, 다른 변수는 값 그대로 전달된다."""
         # Given
@@ -3524,7 +3573,7 @@ class RoleRunnerTest(unittest.TestCase):
     def test_validation_reviewer_프롬프트는_테스트와_scratch_설치를_허용하고_바깥_수정을_금지한다(self):
         """--validation이면 프롬프트가 테스트, scratch 설치, 설치용 네트워크를 허용하고 scratch 밖 수정을 금지하며 권한 프로필에 네트워크가 켜진다."""
         # When
-        completed = self.run_runner("reviewer", "--validation", config={"turns": [{"model": "gpt-6.2-astra", "effort": "high"}]})
+        completed = self.run_runner("reviewer", "--validation", config={"turns": [{"model": "gpt-6.1-terra", "effort": "high"}]})
 
         # Then
         self.assertEqual(0, completed.returncode, completed.stderr)
@@ -3537,8 +3586,25 @@ class RoleRunnerTest(unittest.TestCase):
         self.assertIn("Edit no file outside the scratch folder", prompt)
         self.assertNotIn("Never run build, test, install, or network commands", prompt)
         self.assertNotIn("use no network", prompt)
-        self.assertEqual(self.codex_argv(model="gpt-6.2-astra", validation=True), call["argv"])
+        self.assertEqual(self.codex_argv(model="gpt-6.1-terra", validation=True), call["argv"])
         self.assertTrue(self.status(completed)["validation"])
+
+    def test_model_없는_validation_reviewer는_terra_high를_쓰고_명시한_model과_effort가_우선한다(self):
+        """--validation에 --model이 없으면 Claude 작성 결과의 기본인 gpt-6.1-terra high로 실행하고, 명시한 --model과 --effort는 그대로 따르며, validation이 아닌 reviewer는 기존 검토 모델을 쓴다."""
+        cases = [
+            (("reviewer", "--validation"), "gpt-6.1-terra", "high"),
+            (("reviewer", "--validation", "--model", "gpt-6.2-astra", "--effort", "xhigh"), "gpt-6.2-astra", "xhigh"),
+            (("reviewer",), "gpt-6.2-astra", "high"),
+        ]
+        for arguments, model, effort in cases:
+            with self.subTest(arguments=arguments):
+                # When
+                completed = self.run_runner(*arguments, config={"turns": [{"model": model, "effort": effort}]})
+
+                # Then
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                status = self.status(completed)
+                self.assertEqual((model, effort), (status["model"], status["effort"]))
 
     def test_astra_xhigh_validation_reviewer는_영역별_읽기_전용_하위_에이전트_분할을_허용한다(self):
         """--validation으로 gpt-6.2-astra를 xhigh로 실행하면 프롬프트가 영역별 읽기 전용 하위 에이전트 분할과 결과 병합을 허용하고 'start no agents'는 없다."""

@@ -240,6 +240,8 @@ def retrust_env(settings_env, tmp_path, monkeypatch):
     script, log = tmp_path / "fake_heal.py", tmp_path / "retrust.log"
     script.write_text(FAKE_RETRUST)
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    (tmp_path / "codex" / "config.toml").write_text(
+        f'[marketplaces.{codex_hook_trust.MARKETPLACE}]\nref = "{"b" * 40}"\n', encoding="utf-8")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv("RETRUST_LOG", str(log))
     monkeypatch.setattr(codex_hook_trust, "__file__", str(script))
@@ -267,12 +269,15 @@ def wait_for_start(log):
     return int(log.read_text().split()[0])
 
 
-@pytest.mark.parametrize("case", ["unchanged", "absent"])
-def test_설치_폴더가_그대로거나_없으면_재신뢰를_시작하지_않는다(retrust_env, tmp_path, case):
-    """설치 폴더가 마지막 성공 뒤 그대로이거나 없으면 프롬프트에서 재신뢰를 시작하지 않고 아무것도 출력하지 않는다."""
+@pytest.mark.parametrize("case", ["unchanged", "absent", "tag_ref"])
+def test_설치_폴더가_그대로거나_없거나_ref가_태그면_재신뢰를_시작하지_않는다(retrust_env, tmp_path, case):
+    """설치 폴더가 그대로이거나 없거나 마켓플레이스 ref가 태그 이름이면 프롬프트에서 재신뢰를 시작하지 않고 아무것도 출력하지 않는다."""
     # given
     install, log, starts = retrust_env
-    if case == "unchanged":
+    if case == "tag_ref":
+        (tmp_path / "codex" / "config.toml").write_text(
+            f'[marketplaces.{codex_hook_trust.MARKETPLACE}]\nref = "v1.0.0"\n', encoding="utf-8")
+    elif case == "unchanged":
         stamp = codex_hook_trust.state_folder() / codex_hook_trust.STAMP_FILE
         stamp.parent.mkdir(parents=True)
         codex_hook_trust.write_stamp(stamp, codex_hook_trust.install_identity(install.parent), True, time.time())

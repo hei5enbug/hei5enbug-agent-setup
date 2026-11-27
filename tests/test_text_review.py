@@ -771,13 +771,26 @@ class ToolMarkRulesTest(unittest.TestCase):
         text = self.read("instructions/shared-text.md")
 
         # when
-        retry = text.split("Exit 1:")[1].split("- When a finding can")[0]
+        retry = " ".join(text.split("Exit 0:")[1].split("- When a finding can")[0].split())
 
         # then
         self.assertIn("each sentence you added or changed", retry)
         self.assertIn("matches the sources, has one meaning, and restates no source", retry)
         self.assertIn("then run `text_review.py check --kind <kind> <file>` on the changed text", retry)
         self.assertIn("Run the reviewer no second time", retry)
+
+    def test_공유_글은_검토자가_돌지_않은_check_단계_지적을_고친_뒤_review를_다시_실행하게_한다(self):
+        """검토 전 check 단계의 종료 코드 1은 지적을 고치고 review를 다시 실행하게 하고, 검토자 실행 뒤에만 check로 마친다."""
+        # given
+        text = self.read("instructions/shared-text.md")
+
+        # when
+        exits = " ".join(text.split("Exit 0:")[1].split("- When a finding can")[0].split())
+
+        # then
+        self.assertIn('Exit 1 with `"stage": "check"` means no reviewer ran: fix each finding and run `review` again', exits)
+        self.assertLess(exits.index('"stage": "check"'), exits.index('"stage": "review"'))
+        self.assertLess(exits.index('"stage": "review"'), exits.index("then run `text_review.py check"))
 
     def test_공유_글은_절차의_단계와_구분을_제목으로_부른다(self):
         """단계 번호는 제목과 함께 쓰고 수량은 보존하며 구분과 항목에 같은 번호를 붙이지 않는다."""

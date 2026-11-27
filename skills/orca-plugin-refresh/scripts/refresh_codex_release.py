@@ -106,7 +106,7 @@ def prepare_marketplaces(ids: list[str], context: dict, advance: bool = True) ->
             if tag not in tags:
                 raise core.RefreshError("codex_marketplace_unpinned", "The marketplace is not pinned to an advertised release; its ref stays unchanged while installation is deferred.")
             pins[name] = {"source": source, "ref": tag, "revision": tags[tag]}
-            if current != tags[tag]:
+            if advance and current != tags[tag]:
                 refs[name] = tags[tag]
         except core.RefreshError as error:
             errors[name] = error

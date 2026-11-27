@@ -6,8 +6,8 @@ from typing import Callable
 
 import refresh_interrupt as interrupts
 import refresh_sessions as driver
-from refresh_core import load_run, update_run
-from refresh_install import rollout_busy, rollout_last_record
+from refresh_core import RefreshError, load_run, update_run
+from refresh_install import rollout_busy, rollout_last_record, rollout_open
 from refresh_orca import Orca
 
 
@@ -29,7 +29,26 @@ def change_job(run_id: str, **changes: object) -> dict:
 
 def waiting_on(job: dict) -> list[str]:
     """The rollouts of the sessions the install still waits for that have not ended their turn."""
-    return [path for path in job.get("waits", []) if rollout_busy(Path(path))]
+    return [path for path in job.get("waits", []) if rollout_open(Path(path))]
+
+
+def claim(run_id: str) -> str:
+    """Move a pending job to `installing` under the run-state lock. `claimed` goes to the one caller that does; `expired`
+    means the job's deadline passed first, and `gone` that another caller already took or ended it."""
+    outcome: list[str] = []
+
+    def change(saved: dict) -> dict | None:
+        job = saved.get("codex_install") or {}
+        if job.get("status") != "pending":
+            outcome.append("gone")
+            return None
+        expired = time.time() >= job["deadline"]
+        job["status"] = "not_idle_before_deadline" if expired else "installing"
+        outcome.append("expired" if expired else "claimed")
+        return saved
+
+    update_run(run_id, change)
+    return outcome[0]
 
 
 def aborted(path: Path) -> bool:
@@ -64,11 +83,16 @@ def interrupt_all(orca: Orca, run_id: str, sleep: Callable[[float], None]) -> No
             set_state(run_id, index, "idle")
             continue
         live = {terminal.get("handle"): terminal for terminal in orca.terminals()}
-        if driver.terminal_gone({"handle": item["handle"], "host": "codex"}, live):
+        if driver.terminal_gone({"handle": item["handle"], "host": "codex"}, live) or (
+                (driver.read_marker(item["handle"]) or {}).get("transcript_path") != item["rollout"]):
+            set_state(run_id, index, "unconfirmed", wait=True)
+            continue
+        try:
+            orca.keys(item["handle"], interrupts.ESCAPE_KEY)
+        except RefreshError:
             set_state(run_id, index, "unconfirmed", wait=True)
             continue
         set_state(run_id, index, "esc_sent")
-        orca.keys(item["handle"], interrupts.ESCAPE_KEY)
         deadline = time.time() + interrupts.INTERRUPT_SECONDS
         while rollout_busy(path) and time.time() < deadline:
             sleep(driver.POLL_SECONDS)

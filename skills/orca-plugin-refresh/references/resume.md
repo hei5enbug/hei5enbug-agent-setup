@@ -7,7 +7,7 @@ instructions are stale, so the conversation ends with one copy of the current in
 check stays as planned, shows the failed check in `resume_check`, and is offered once for approval. A session with
 `plugin_load_error` is never resumed without approval. A busy Codex session is `deferred` with the remaining action
 `resume`, which the helper carries out without asking once its rollout records the end of the turn; a check that fails
-then ends it `skipped` with `resume_check`.
+then, when it still fails at the one-hour limit, ends it `skipped` with `resume_check` and `resume_approval_needed`.
 
 Run the `resume` subcommand only for a Claude Code or Codex session that reports `resume_approval_needed`, and only for the
 terminals the user approved in the current request. Run `python3 <script> resume --run-id <run_id> --terminal <handle> --json`, repeating
