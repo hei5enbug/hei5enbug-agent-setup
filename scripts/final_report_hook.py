@@ -1,9 +1,9 @@
 """Stop hook that makes the independent text review run before a final report that follows a change.
 
 It continues the turn once, as Stop hook feedback, when the main session ends a turn that changed files with a report
-that no `text_review.py` review checked, or that differs from the draft the last passing review checked. A review
-counts when its command names the script and kind, or when a Bash result holds its final-report review result. Any
-unreadable input lets the stop pass.
+that no `text_review.py` check checked, or that differs from the draft the last passing check checked. The reasons ask
+for `check --kind final-report`; a `review` or `check` run counts when its command names the script and kind, or when a
+Bash result holds its final-report review result. Any unreadable input lets the stop pass.
 """
 
 from __future__ import annotations
@@ -76,9 +76,9 @@ def reason_text(root: Path) -> str:
     return (
         f"This turn changed files and {MISSING_REVIEW}. "
         f"Read {root}/instructions/shared-text.md, section \"Independent text review\", then run "
-        f"`python3 {root}/scripts/text_review.py review --kind {FINAL_REPORT_KIND} --draft <file> ...` on the report "
-        "and apply its findings. "
-        "Review every other text this turn wrote for other people the same way, with its own --kind. "
+        f"`python3 {root}/scripts/text_review.py check --kind {FINAL_REPORT_KIND} <file>` on the report "
+        "and fix its findings. "
+        "Review every other text this turn wrote for other people as that section says, with its own --kind. "
         "Then send the report again."
     )
 
@@ -102,7 +102,7 @@ def mismatch_reason_text(root: Path) -> str:
     return (
         f"The final report {CHANGED_REPORT}. "
         "Send that reviewed text unchanged, or run "
-        f"`python3 {root}/scripts/text_review.py review --kind {FINAL_REPORT_KIND} --draft <file> ...` "
+        f"`python3 {root}/scripts/text_review.py check --kind {FINAL_REPORT_KIND} <file>` "
         "again on the changed report and send the text that passes."
     )
 

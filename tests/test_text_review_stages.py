@@ -107,7 +107,7 @@ class StageNumberAloneTest(unittest.TestCase):
         self.assertEqual((0, []), (result.returncode, payload["findings"]))
         self.assertEqual(["stage-number-alone"], [item["rule"] for item in payload["advisories"]])
         flagged = text_review.check_text(draft, "other", False)[1]
-        assignment = text_review.build_assignment("other", draft, [], [], [], None, flagged)
+        assignment = text_review.build_assignment("pr-description", draft, [], [], [], None, flagged)
         self.assertEqual((1, 2), (assignment.count(STAGE_HEADING), assignment.count(draft.strip())))
 
     def test_번호만_쓴_줄이_없으면_검토_배정에_단계_설명을_싣지_않고_검토자_지침에는_항상_둔다(self):
@@ -116,7 +116,7 @@ class StageNumberAloneTest(unittest.TestCase):
         draft = "Run 0 Check and build first.\n"
 
         # when
-        assignment = text_review.build_assignment("other", draft, [], [], [], None, [])
+        assignment = text_review.build_assignment("pr-description", draft, [], [], [], None, [])
 
         # then
         self.assertNotIn(STAGE_HEADING, assignment)

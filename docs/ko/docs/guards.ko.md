@@ -240,7 +240,7 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
 ## 최종 보고 검토
 
 `hooks/claude-hooks.json`만 등록하는 `Stop` 훅인 `scripts/final_report_hook.py`는 변경 뒤에 나가는 최종 보고를
-`instructions/shared-text.md`의 독립 텍스트 검토가 확인하지 않았을 때 턴을 한 번 이어 가게 합니다. 이유는
+`instructions/shared-text.md`가 최종 보고에 요구하는 텍스트 점검이 확인하지 않았을 때 턴을 한 번 이어 가게 합니다. 이유는
 `hookSpecificOutput.additionalContext`로 돌려주며, Claude Code는 이를 훅 오류가 아니라 `Stop hook feedback`으로
 표시합니다. 두 가지 이유를 각각 한 턴에 한 번까지만 보냅니다. `stop_hook_active`가 true인 멈춤을 모두 건너뛰는 대신, 세션
 기록의 현재 턴에서 자신이 앞서 보낸 피드백을 찾습니다. 그래서 이 훅이나 다른 훅이 이어 간 멈춤도 검사하고, 요청한 검토
@@ -271,18 +271,19 @@ worktree에는 `orca worktree set --display-name`을 알립니다. `orca worktre
   `？`로 끝나지 않습니다.
 
 이유는 네 문장 이내이며, 이 턴이 파일을 바꿨고 어떤 텍스트 검토도 확인하지 않은 최종 보고로 끝난다고 말하고, 플러그인의
-`instructions/shared-text.md`의 "Independent text review" 절과 `text_review.py review --kind final-report --draft <file> ...`
-명령을 알리며, 그 결과를 반영하라고 요청하고, 이 턴이 다른 사람을 위해 쓴 나머지 모든 글도 각자의 `--kind`로 같은 방식으로
-검토하라고 요청한 뒤, 보고를 다시 보내라고 요청합니다. 훅은 기록을 한 번만 스트리밍으로 읽고 하위 프로세스를
+`instructions/shared-text.md`의 "Independent text review" 절과 `text_review.py check --kind final-report <file>`
+명령을 알리며, 그 지적을 고치라고 요청하고, 이 턴이 다른 사람을 위해 쓴 나머지 모든 글도 그 절이 말하는 대로 각자의
+`--kind`로 검토하라고 요청한 뒤, 보고를 다시 보내라고 요청합니다. 최종 보고에는 검토자 단계가 없으므로, 훅은 `review`
+실행도 여전히 받아들이지만 더는 그 실행을 요청하지 않습니다. 훅은 기록을 한 번만 스트리밍으로 읽고 하위 프로세스를
 시작하지 않습니다. 기록이 없거나 읽기나 파싱에 실패하거나 입력 형식이 잘못되면 멈춤을 통과시키고, 통과할 때는 아무것도
 출력하지 않습니다. 이슈 #69의 평가 실행에서 에이전트가 텍스트 규칙을 읽지도 검토를 실행하지도 않고 최종 보고를 보냈고,
 다른 실행에서는 Bash heredoc으로 문서를 쓴 뒤 검토 없이 보고를 보냈기 때문에 이 훅이 있습니다.
 
-훅은 턴이 파일을 바꿨고, 통과한 `text_review.py review`나 `check --kind final-report`가 `final_report_sha256`을 냈는데
+훅은 턴이 파일을 바꿨고, 통과한 `text_review.py check --kind final-report`나 `review --kind final-report`가 `final_report_sha256`을 냈는데
 보낸 보고의 SHA-256이 그 값과 다를 때도 턴을 이어 가게 하며, 보고의 길이는 상관없고 비어 있지 않은 마지막 줄이 `?`나 `？`로 끝나는
 메시지만 제외합니다. 양쪽 모두 줄바꿈 방식, 줄 끝 공백, 반복된 빈 줄, 앞뒤 빈 줄의 차이는
-무시합니다. 이유는 보고가 마지막으로 통과한 검토가 확인한 초안과 다르다고 말하고, 그 글을 그대로 보내거나 바뀐 보고를
-다시 검토하라고 요청합니다. 검토가 해시를 낸 적이 없는 턴은 이 규칙으로 이어 가게 하지 않습니다. 이슈 #69의 다른 평가 실행에서
+무시합니다. 이유는 보고가 마지막으로 통과한 검토가 확인한 초안과 다르다고 말하고, 그 글을 그대로 보내거나 바뀐 보고에
+`check --kind final-report`를 다시 실행하라고 요청합니다. 검토가 해시를 낸 적이 없는 턴은 이 규칙으로 이어 가게 하지 않습니다. 이슈 #69의 다른 평가 실행에서
 에이전트가 검토를 통과한 뒤 최종 보고에 줄을 더해 보냈고, 채점자가 그 줄에서 문제를 찾았기 때문에 이 규칙이 있습니다.
 인터프리터 스크립트 감지와 길이에 상관없는 불일치 규칙은 이슈 #69의 이후 평가 실행 둘 때문에 있습니다. 한 실행은
 `python3` heredoc 스크립트로만 파일을 고친 뒤 검토 없이 711자 보고를 보냈고, 다른 실행은 통과한 초안과 다른 296자 보고를

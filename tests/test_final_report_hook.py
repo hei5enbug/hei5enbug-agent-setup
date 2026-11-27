@@ -111,7 +111,7 @@ class FinalReportHookTest(unittest.TestCase):
         # When
         output = self.assert_blocks(self.run_hook())
         # Then
-        self.assertIn("text_review.py review --kind final-report", output["reason"])
+        self.assertIn("text_review.py check --kind final-report", output["reason"])
         self.assertIn("instructions/shared-text.md", output["reason"])
         self.assertLessEqual(output["reason"].count(". "), 3)
 
@@ -122,7 +122,7 @@ class FinalReportHookTest(unittest.TestCase):
         # When
         output = self.assert_blocks(self.run_hook())
         # Then
-        self.assertIn("text_review.py review --kind final-report", output["reason"])
+        self.assertIn("text_review.py check --kind final-report", output["reason"])
 
     def test_커밋만_한_턴도_막는다(self):
         self.write(prompt(), assistant(bash("git -C /tmp/work commit -m 'fix: demo'")))
@@ -143,7 +143,7 @@ class FinalReportHookTest(unittest.TestCase):
         # When
         output = self.assert_blocks(self.run_hook())
         # Then
-        self.assertIn("text_review.py review --kind final-report", output["reason"])
+        self.assertIn("text_review.py check --kind final-report", output["reason"])
 
     def test_세션_기록에_읽을_수_없는_줄이_있으면_통과한다(self):
         self.write(prompt("earlier task"), assistant(edit()), '{"type": "user", "message": {"role": "user", "content": "lat')
@@ -212,7 +212,7 @@ class FinalReportHookTest(unittest.TestCase):
                 with self.subTest(name=name, agent_input=agent_input):
                     self.write(prompt(), assistant(tool(name, description="demo", prompt="do it", **agent_input)))
                     output = self.assert_blocks(self.run_hook())
-                    self.assertIn("text_review.py review --kind final-report", output["reason"])
+                    self.assertIn("text_review.py check --kind final-report", output["reason"])
 
     def test_읽기_전용_하위_에이전트만_쓴_턴은_통과한다(self):
         for agent_type in ("demo-plugin:scout", "Explore", "demo-plugin:reviewer", "Plan", "claude-code-guide"):
@@ -384,6 +384,7 @@ class FinalReportHookTest(unittest.TestCase):
         output = self.assert_blocks(self.run_hook(last_assistant_message=draft + "Added after the review.\n"))
         # Then
         self.assertIn("differs from the draft", output["reason"])
+        self.assertIn("text_review.py check --kind final-report", output["reason"])
         self.assertLessEqual(output["reason"].count(". "), 3)
 
     def test_줄끝_공백과_빈_줄만_다른_보고는_통과한다(self):

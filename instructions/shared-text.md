@@ -72,36 +72,32 @@ Before posting text to an external system, writing a file another person reads, 
 after the passes above. A final report is the reply that ends a task by reporting its result, not a short answer or a
 question. Never count a check you record about your own draft as this review.
 
+- `--kind` is `pr-description`, `review-reply`, `issue-body`, `ticket-comment`, `commit-message`, `chat-message`,
+  `shared-document`, `final-report`, or `other`.
+- For every kind except `pr-description`, `issue-body`, and `shared-document`, run no reviewer: run the passes above and
+  `python3 <Source directory>/scripts/text_review.py check --kind <kind> <file>`, fix each finding, and post. The check
+  also takes `--no-ticket-keys`.
+
+For `pr-description`, `issue-body`, and `shared-document`, run once:
+
 ```text
 python3 <Source directory>/scripts/text_review.py review --kind <kind> --draft <file> --rules <file>... --source <file>...
 ```
 
-- `--kind` is `pr-description`, `review-reply`, `issue-body`, `ticket-comment`, `commit-message`, `chat-message`,
-  `shared-document`, `final-report`, or `other`. Pass the destination's writing rules with `--rules`, the request,
-  diff, or ticket the text reports on with `--source`, the length budget with `--budget <characters>`, and
-  `--no-ticket-keys` when the destination's rules forbid a ticket key. For a final report, pass the user's request and
-  the diff of the whole change as `--source`, and `--rules` only for report rules the user or the project gave. For an
-  existing text you changed only in part, also pass its diff as `--source`. For a text that goes into an existing
-  ticket, pull request, or thread, also pass that item's body and whole history as `--source`.
+- Pass the destination's writing rules with `--rules`, the request, diff, or ticket the text reports on with
+  `--source`, the length budget with `--budget <characters>`, and `--no-ticket-keys` when the destination's rules
+  forbid a ticket key. For an existing text you changed only in part, also pass its diff as `--source`. For a text that
+  goes into an existing ticket, pull request, or thread, also pass that item's body and whole history as `--source`.
 - It first checks the patterns the text alone decides and stops on them; fix each finding. It then has a reviewer with
   no conversation context review the draft against only the rules and sources you passed. The check passes lists of
   identifiers as advisories for the reviewer to judge against the destination's writing rules.
-- Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text, or pass your reason for
-  keeping a flagged sentence with `--note`. When you change the text, repeat both passes over the whole text as
-  [the update rule](shared-text.md#cut-and-completeness-passes) says, then check that each sentence you added or
-  changed matches the sources, has one meaning, and restates no source.
-  Whether you changed the text or passed a note, then run the review again without asking. Post only after a run returns no findings.
-- Compare each finding with the findings of the earlier runs of the same draft. It repeats when an earlier run raised
-  the same problem in the same sentence or point, whether you applied that finding or answered it with `--note`; a
-  different problem in a sentence that an earlier finding changed or a note kept is new. When a finding repeats, stop,
-  post nothing, and ask the user, showing it with your earlier change or note.
+- Exit 0: post the reviewed text unchanged. Exit 1: apply each finding to the whole text, or keep a flagged sentence
+  and state your reason for it. When you change the text, repeat both passes over the whole text as
+  [the update rule](shared-text.md#cut-and-completeness-passes) says, check that each sentence you added or changed
+  matches the sources, has one meaning, and restates no source, then run `text_review.py check --kind <kind> <file>`
+  on the changed text, fix each finding, and post. Run the reviewer no second time for the draft.
 - When a finding can be resolved only by a decision the user must make, such as a scope or a fact the sources do not
-  settle, apply the run's other findings, post nothing, and ask about that finding.
-- Count only runs that reach the reviewer. When the fourth such run for one draft still returns findings, post
-  nothing, show the user the remaining findings, and ask.
-- For a final report, at each of these stops send the revised report instead of asking, with no line about the
-  review, once `text_review.py check --kind final-report <file>` returns no findings for it. Write a finding that needs
-  the user's decision into the report as one question.
+  settle, apply the other findings, post nothing, and ask about that finding.
 - Exit 3 means the reviewer gave no verdict. Say that the review did not run, show the cause in the result's `error`
   in your question, and ask before posting externally.
 - Exit 4 means the reviewer's usage limit is reached. Post without asking and without another reviewer, never a Claude

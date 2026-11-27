@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Check a draft text for patterns the text alone decides, then have a context-free reviewer read it."""
+"""Check a draft text for patterns the text alone decides, then, for the long kinds, have a context-free reviewer read it."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-import os
 import re
-import time
 import shutil
 import subprocess
 import sys
@@ -19,7 +17,8 @@ KINDS = (
     "pr-description", "review-reply", "issue-body", "ticket-comment", "commit-message",
     "chat-message", "shared-document", "final-report", "other",
 )
-REVIEW_MODELS = {kind: "gpt-6.1-sol" for kind in KINDS}
+REVIEWED_KINDS = frozenset({"pr-description", "issue-body", "shared-document"})
+REVIEW_MODELS = {kind: "gpt-6.1-sol" for kind in REVIEWED_KINDS}
 DEFAULT_TIMEOUT = 600
 DEFAULT_REVIEWS = 1
 SERVICE_TIERS = ("fast",)
@@ -35,11 +34,7 @@ IDENTIFIER_MAX_LENGTH = 80
 IDENTIFIER_LIST_MINIMUM = 3
 LABEL_MAX_LENGTH = 40
 AGENT_FACING_KINDS = ("issue-body",)
-STATE_DIR_ENV = "TEXT_REVIEW_STATE_DIR"
-STATE_DIR_NAME = "text-review-state"
-ROUNDS_FIRST_STOP = 4
-ROUNDS_STOP_EVERY = 3
-ROUNDS_IDLE_SECONDS = 6 * 3600
+REVIEWER_NOT_USED = "not_used_for_kind"
 
 UNCHANGED_PATTERNS = (
     r"\b(?:is|are|was|were|stays?|remains?)\s+(?:still\s+)?unchanged\b",
@@ -129,22 +124,8 @@ FLAGGED_EXPLANATIONS = {
 
 READERS = {
     "pr-description": "a reviewer who sees the diff next to this text.",
-    "review-reply": "the reviewer who asked, who sees the diff and the review thread.",
     "issue-body": "someone who reads only this issue and its links, not the conversation or a diff.",
-    "ticket-comment": "someone who reads the ticket and this comment, not a diff.",
-    "commit-message": "someone reading history, who sees the diff of this commit.",
-    "chat-message": "a teammate who reads only this message.",
     "shared-document": "a colleague who reads only this document and its links.",
-    "final-report": (
-        "the user who asked for the work and has not read the diff, the logs, or the tool output. What is left for "
-        "them, such as an uncommitted change, a skipped step and why it was skipped, or a failing check, is a fact "
-        "they need, and so is the regression each new test catches. A file, function, or test name they need not "
-        "open or act on, how the work went, such as earlier failures, retries, or who did each part, and a count "
-        "they did not ask for are not. When independent validation ran, the one line that gives the link or path of "
-        "an independent review's result, and each finding left unresolved, are facts they need; the reviewer model, "
-        "effort, pass count, finding categories, and safety proof are not."
-    ),
-    "other": "someone who reads only this text and its links.",
 }
 
 LIST_ITEM = re.compile(r"^(\s*)(?:[-*+]|\d+[.)])\s+(.*)$")
@@ -360,46 +341,9 @@ def flagged_section(advisories: list[dict]) -> list[str]:
     return parts
 
 
-def rounds_file(kind: str, draft: str) -> Path | None:
-    """Where the count of runs that returned findings for this draft file is kept; a draft read from standard input has none."""
-    if draft == "-":
-        return None
-    folder = Path(os.environ.get(STATE_DIR_ENV) or Path(tempfile.gettempdir()) / STATE_DIR_NAME)
-    return folder / ("rounds-" + hashlib.sha256(f"{kind}\0{Path(draft).resolve()}".encode("utf-8")).hexdigest() + ".json")
-
-
-def count_round(path: Path | None, now: float) -> int:
-    """Count one more run that returned findings for the draft; a count idle for hours starts over."""
-    if path is None:
-        return 1
-    try:
-        saved = json.loads(path.read_text(encoding="utf-8"))
-        rounds = saved["rounds"] if now - saved["at"] < ROUNDS_IDLE_SECONDS and isinstance(saved["rounds"], int) else 0
-    except (OSError, ValueError, KeyError, TypeError):
-        rounds = 0
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"rounds": rounds + 1, "at": now}), encoding="utf-8")
-    except OSError:
-        pass
-    return rounds + 1
-
-
-def clear_rounds(path: Path | None) -> None:
-    if path is not None:
-        path.unlink(missing_ok=True)
-
-
-def round_stop(rounds: int) -> bool:
-    """The fourth run that returned findings stops the loop, and so does every third run after it."""
-    return rounds >= ROUNDS_FIRST_STOP and (rounds - ROUNDS_FIRST_STOP) % ROUNDS_STOP_EVERY == 0
-
-
 def build_assignment(kind: str, draft: str, rules: list, sources: list, notes: list[str], budget: int | None,
                      advisories: list[dict]) -> str:
-    parts = [REVIEWER_INSTRUCTIONS]
-    if kind != FINAL_REPORT_KIND:
-        parts += [TOOL_MARK_HEADING, TOOL_MARK_ITEM]
+    parts = [REVIEWER_INSTRUCTIONS, TOOL_MARK_HEADING, TOOL_MARK_ITEM]
     parts += [f"Text kind: {kind}\n", f"Reader: {READERS[kind]}\n"]
     parts += flagged_section(advisories)
     parts += named_files("Destination writing rules", rules)
@@ -506,7 +450,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--kind", choices=KINDS)
     check.add_argument("--no-ticket-keys", action="store_true")
     check.add_argument("file")
-    review = commands.add_parser("review", help="check, then run a context-free reviewer")
+    review = commands.add_parser("review", help="check, then run a context-free reviewer for pr-description, issue-body, and shared-document")
     review.add_argument("--kind", choices=KINDS, required=True)
     review.add_argument("--draft", required=True)
     review.add_argument("--rules", action="append", default=[])
@@ -553,6 +497,9 @@ def command_review(args: argparse.Namespace) -> int:
     if found:
         emit({"stage": "check", "findings": found, "advisories": advisories})
         return EXIT_FINDINGS
+    if args.kind not in REVIEWED_KINDS:
+        emit({"findings": [], "advisories": advisories, "reviewer": REVIEWER_NOT_USED, **passed_digest(args.kind, draft)})
+        return EXIT_OK
     model = args.model or REVIEW_MODELS[args.kind]
     base = {"stage": "review", "kind": args.kind, "model": model}
     assignment = build_assignment(args.kind, draft, rules, sources, args.note, args.budget, advisories)
@@ -564,14 +511,9 @@ def command_review(args: argparse.Namespace) -> int:
     errors = [outcome["error"] for outcome in outcomes if "error" in outcome]
     limited = bool(errors) and all(outcome.get("reason") == USAGE_LIMIT_REASON for outcome in outcomes if "error" in outcome)
     status = {"runner": runners[0], "runners": runners}
-    rounds_path = rounds_file(args.kind, args.draft)
     if findings:
-        rounds = count_round(rounds_path, time.time())
-        status = {**status, "round": rounds, **({"stop": True} if round_stop(rounds) else {})}
         emit({**base, "findings": findings, "over_budget_facts": facts, **status, **({"errors": errors} if errors else {})})
         return EXIT_FINDINGS
-    if not errors:
-        clear_rounds(rounds_path)
     if limited:
         emit({**base, "reason": USAGE_LIMIT_REASON, "error": "; ".join(errors), **status})
         return EXIT_USAGE_LIMIT

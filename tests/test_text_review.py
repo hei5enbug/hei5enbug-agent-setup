@@ -14,10 +14,6 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "text_review.py"
-KINDS = (
-    "pr-description", "review-reply", "issue-body", "ticket-comment", "commit-message",
-    "chat-message", "shared-document", "final-report", "other",
-)
 DEFAULT_MODEL = "gpt-6.1-sol"
 TOOL_MARK_HEADING = "## Cut item: tool marks"
 
@@ -296,6 +292,12 @@ class ReviewTest(unittest.TestCase):
     def argv(self):
         return json.loads((self.out / "argv.json").read_text(encoding="utf-8"))
 
+    def assignment_of(self, kind):
+        spec = importlib.util.spec_from_file_location("text_review_assignment", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.build_assignment(kind, CLEAN_DRAFT, [], [], [], None, [])
+
     def assignment(self):
         return (self.out / "assignment.md").read_text(encoding="utf-8")
 
@@ -361,16 +363,6 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertEqual(1, len(json.loads(result.stdout)["findings"]))
 
-    def test_최종_보고의_독자에게는_커밋하지_않은_변경처럼_남은_일이_필요한_사실로_적힌다(self):
-        """검토자가 커밋하지 않았다는 문장을 지우라고 하면 사용자가 남은 일을 모르게 되므로, 최종 보고의 독자 문장이 그 사실을 필요하다고 적는다."""
-        # given
-        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
-        # when
-        result = self.review("none", kind="final-report")
-        # then
-        self.assertEqual(0, result.returncode, result.stdout)
-        self.assertIn("an uncommitted change", self.assignment())
-
     def test_과제는_올릴_곳의_규칙이_요구하는_내용을_지울_거리로_보고하지_말라고_한다(self):
         """팀 규칙이 요구하는 검사 결과까지 지우라는 보고가 나오면 작성자가 끝없이 고치게 되므로, 과제에 규칙 우선 문장이 들어간다."""
         # given
@@ -382,53 +374,39 @@ class ReviewTest(unittest.TestCase):
         self.assertIn("never report as removable what they require", self.assignment())
 
     def test_과제에는_글_종류마다_독자가_함께_보는_것이_적혀_diff_되풀이_판단이_종류에_맞는다(self):
-        """최종 보고의 독자는 diff를 보지 않았고 PR 설명의 독자는 diff를 보므로, 과제에 종류별 독자 문장이 들어간다."""
-        for kind, phrase in (("final-report", "has not read the diff"), ("pr-description", "sees the diff")):
+        """PR 설명의 독자는 diff를 보고 이슈 본문의 독자는 보지 않으므로, 과제에 종류별 독자 문장이 들어간다."""
+        for kind, phrase in (("pr-description", "sees the diff"), ("issue-body", "not the conversation or a diff"),
+                             ("shared-document", "only this document and its links")):
             with self.subTest(kind):
                 # given
-                self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
                 # when
-                result = self.review("none", kind=kind)
+                assignment = self.assignment_of(kind)
                 # then
-                self.assertEqual(0, result.returncode, result.stdout)
-                self.assertIn(phrase, self.assignment())
+                self.assertIn("Reader: ", assignment)
+                self.assertIn(phrase, assignment.split("Reader: ")[1].split("\n")[0])
 
-    def test_최종_보고를_뺀_모든_종류의_과제에만_도구_표시_항목이_들어간다(self):
-        """최종 보고에 이 항목이 들어가면 독립 검증 한 줄까지 지우라는 보고가 나오고, 다른 종류에서 빠지면 모델 이름이 남으므로, 최종 보고만 뺀 모든 종류의 과제에 항목이 있다."""
-        for kind in KINDS:
+    def test_검토자를_쓰는_모든_종류의_과제에_도구_표시_항목이_들어간다(self):
+        """검토자를 쓰는 종류에서 이 항목이 빠지면 모델 이름이 글에 남으므로, 세 종류의 과제에 항목이 있다."""
+        for kind in ("pr-description", "issue-body", "shared-document"):
             with self.subTest(kind):
                 # given
-                self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
                 # when
-                result = self.review("none", kind=kind)
+                assignment = self.assignment_of(kind)
                 # then
-                self.assertEqual(0, result.returncode, result.stdout)
-                self.assertEqual(kind != "final-report", TOOL_MARK_HEADING in self.assignment())
+                self.assertIn(TOOL_MARK_HEADING, assignment)
 
     def test_도구_표시_항목은_제목과_첫_문장의_표시도_지우라고_하고_서명_한_줄만_남긴다(self):
         """검토자가 제목이나 커밋 제목의 모델 이름을 못 지우는 글로 보면 규칙이 무력해지므로, 항목이 그 예외를 뒤집고 목적어가 되는 도구와 서명 줄만 남긴다."""
         # given
         self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
         # when
-        result = self.review("none", kind="commit-message")
+        result = self.review("none")
         # then
         self.assertEqual(0, result.returncode, result.stdout)
         item = self.assignment().split(TOOL_MARK_HEADING)[1].split("\n## ")[0]
         for phrase in ("a model name, version, or reasoning effort", "a title, a heading, a commit subject", "subject of the work",
                        "last-line agent signature", "only the signature line", "request"):
             self.assertIn(phrase, item)
-
-    def test_최종_보고의_독자에게는_검토_결과를_가리키는_한_줄과_남은_지적이_필요한_사실로_적힌다(self):
-        """검토자가 결과 한 줄이나 남은 지적을 지우라고 하면 사용자가 검토 결과를 찾지 못하므로, 최종 보고의 독자 문장이 둘을 필요하다고 적는다."""
-        # given
-        self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
-        # when
-        result = self.review("none", kind="final-report")
-        # then
-        self.assertEqual(0, result.returncode, result.stdout)
-        reader = self.assignment().split("Reader: ")[1].split("\n")[0]
-        self.assertIn("link or path of an independent review's result", reader)
-        self.assertIn("each finding left unresolved", reader)
 
     def test_repeated_check_ticket_key_same_page_links_발견이_있으면_검토자_실행기를_시작하지_않고_종료_코드_1을_낸다(self):
         drafts = {
@@ -458,7 +436,7 @@ class ReviewTest(unittest.TestCase):
         line = "- Added `test_demo_alpha`, `test_demo_beta`, and `test_demo_gamma`."
         self.draft.write_text(draft, encoding="utf-8")
         # when
-        result = self.review("none", "--rules", str(rules), kind="review-reply")
+        result = self.review("none", "--rules", str(rules))
         # then
         self.assertEqual(0, result.returncode, result.stdout)
         self.assertEqual("review", json.loads(result.stdout)["stage"])
@@ -565,17 +543,49 @@ class ReviewTest(unittest.TestCase):
         self.assertEqual(["f1"], payload["over_budget_facts"])
         self.assertEqual({"exit": 0, "verified": True}, payload["runner"])
 
-    def test_최종_보고_검토가_통과하면_해시를_내고_발견이_있거나_다른_종류이면_내지_않는다(self):
-        # given
+    def test_검토자를_쓰는_종류가_아닌_글은_검토자를_시작하지_않고_점검_결과만_낸다(self):
+        """최종 보고와 다른 짧은 글에 검토자를 돌리면 비용만 들고 점검으로 충분하므로, review가 검토자 없이 점검 결과와 해시를 내고 발견이 있으면 종료 코드 1을 낸다."""
         digest = self.load_digest(CLEAN_DRAFT)
-        # when
-        passed = self.review("none", kind="final-report")
-        found = self.review("findings", kind="final-report")
-        other = self.review("none")
-        # then
-        self.assertEqual(digest, json.loads(passed.stdout)["final_report_sha256"])
-        self.assertNotIn("final_report_sha256", json.loads(found.stdout))
-        self.assertNotIn("final_report_sha256", json.loads(other.stdout))
+        for kind in ("final-report", "ticket-comment"):
+            with self.subTest(kind=kind, draft="clean"):
+                # given
+                self.draft.write_text(CLEAN_DRAFT, encoding="utf-8")
+                # when
+                result = self.review("findings", kind=kind)
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(0, result.returncode, result.stdout)
+                self.assertEqual("not_used_for_kind", payload["reviewer"])
+                self.assertEqual([], payload["findings"])
+                self.assertFalse((self.out / "started").exists())
+                self.assertEqual(kind == "final-report", payload.get("final_report_sha256") == digest)
+            with self.subTest(kind=kind, draft="repeated-check"):
+                # given
+                self.draft.write_text("- Ran `a`\n- Ran `a`\n", encoding="utf-8")
+                # when
+                result = self.review("none", kind=kind)
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(1, result.returncode)
+                self.assertEqual("repeated-check", payload["findings"][0]["rule"])
+                self.assertNotIn("final_report_sha256", payload)
+                self.assertFalse((self.out / "started").exists())
+
+    def test_pr_설명과_이슈_본문과_공유_문서는_review가_검토자를_시작한다(self):
+        """긴 글은 검토자 한 번을 유지하므로, 세 종류는 review가 검토자를 실행하고 해시는 내지 않는다."""
+        for kind in ("pr-description", "issue-body", "shared-document"):
+            with self.subTest(kind=kind):
+                # given
+                (self.out / "started").unlink(missing_ok=True)
+                # when
+                result = self.review("none", kind=kind)
+                # then
+                payload = json.loads(result.stdout)
+                self.assertEqual(0, result.returncode, result.stdout)
+                self.assertEqual("review", payload["stage"])
+                self.assertNotIn("reviewer", payload)
+                self.assertNotIn("final_report_sha256", payload)
+                self.assertTrue((self.out / "started").exists())
 
     def load_digest(self, text):
         spec = importlib.util.spec_from_file_location("text_review_digest", SCRIPT)
@@ -659,7 +669,7 @@ class ReviewTest(unittest.TestCase):
         self.assertIn("``````\nbefore\n`````\ninner\n`````\nafter\n``````", self.assignment())
 
     def test_종류별_기본_모델과_model_덮어쓰기가_실행기_인자에_전달된다(self):
-        for kind in KINDS:
+        for kind in ("pr-description", "issue-body", "shared-document"):
             with self.subTest(kind=kind):
                 # when
                 result = self.review("none", kind=kind)
@@ -761,12 +771,13 @@ class ToolMarkRulesTest(unittest.TestCase):
         text = self.read("instructions/shared-text.md")
 
         # when
-        retry = text.split("Exit 1:")[1].split("Post only")[0]
+        retry = text.split("Exit 1:")[1].split("- When a finding can")[0]
 
         # then
         self.assertIn("each sentence you added or changed", retry)
         self.assertIn("matches the sources, has one meaning, and restates no source", retry)
-        self.assertIn("then run the review again", retry)
+        self.assertIn("then run `text_review.py check --kind <kind> <file>` on the changed text", retry)
+        self.assertIn("Run the reviewer no second time", retry)
 
     def test_공유_글은_절차의_단계와_구분을_제목으로_부른다(self):
         """단계 번호는 제목과 함께 쓰고 수량은 보존하며 구분과 항목에 같은 번호를 붙이지 않는다."""

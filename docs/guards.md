@@ -262,7 +262,7 @@ cannot report a tab title, so the hook judges the title only by the session's ow
 ## Final report review
 
 `scripts/final_report_hook.py`, a `Stop` hook that only `hooks/claude-hooks.json` registers, keeps the turn going once when a final report that
-follows a change was never checked by the independent text review in `instructions/shared-text.md`. It returns its
+follows a change was never checked by the text check that `instructions/shared-text.md` requires for a final report. It returns its
 reason as `hookSpecificOutput.additionalContext`, which Claude Code shows as `Stop hook feedback`, not as a hook error.
 It gives each of its two reasons at most once per turn: it finds its own earlier feedback in the current turn of the
 transcript instead of skipping every stop where `stop_hook_active` is true. A stop that this hook or another hook
@@ -297,19 +297,20 @@ draft. It continues the turn only when all of these hold:
 
 The reason, at most four sentences, says that this turn changed files and ends with a final report that no text review
 checked, names the plugin's `instructions/shared-text.md` section "Independent text review" and the
-`text_review.py review --kind final-report --draft <file> ...` command, asks to apply its findings, asks to review every
-other text this turn wrote for other people the same way with its own `--kind`, and asks to send the report again. The
+`text_review.py check --kind final-report <file>` command, asks to fix its findings, asks to review every other text
+this turn wrote for other people as that section says with its own `--kind`, and asks to send the report again. A final
+report gets no reviewer stage, so the hook still accepts a `review` run but no longer asks for one. The
 hook streams the transcript once and starts no subprocess. A missing transcript, a read or parse error, or malformed
 input lets the stop pass, and a passing stop prints nothing. It exists because, in an evaluation run
 for issue #69, the agent sent its final report without reading the text rules or running the review, and in another it
 wrote a document with a Bash heredoc and then sent its report unreviewed.
 
-The hook also continues the turn when it changed files and a passing `text_review.py review` or `check --kind
-final-report` printed a `final_report_sha256`, and the SHA-256 of the sent report differs from it, whatever the report's
+The hook also continues the turn when it changed files and a passing `text_review.py check --kind final-report` or
+`review --kind final-report` printed a `final_report_sha256`, and the SHA-256 of the sent report differs from it, whatever the report's
 length; only a message whose last non-empty line ends with `?` or `？` is exempt. Both sides ignore line-ending
 differences, trailing spaces, repeated blank lines, and leading or trailing blank lines. The reason says that the report
-differs from the draft the last passing review checked and asks to send that text unchanged or to review the changed
-report again. A turn whose reviews never printed a digest is not continued on this rule. It exists because, in another
+differs from the draft the last passing review checked and asks to send that text unchanged or to run `check --kind
+final-report` again on the changed report. A turn whose reviews never printed a digest is not continued on this rule. It exists because, in another
 evaluation run for issue #69, the agent added lines to its final report after the review passed, and the grader found
 problems in them. The interpreter-script detection and the any-length mismatch rule exist because two later evaluation
 runs for issue #69 edited files only through `python3` heredoc scripts and sent an unreviewed 711-character report, and
