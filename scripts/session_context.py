@@ -596,16 +596,31 @@ def write_session_settings(path: Path, block: str) -> None:
             pass
 
 
+def main_claude_session(event: dict) -> bool:
+    import plugin_toggles
+
+    return not (
+        plugin_toggles.detect_host() != "claude"
+        or os.environ.get(ASSIGNED_ROLE_ENV)
+        or os.environ.get("HEI5ENBUG_PARENT_SESSION")
+        or event.get("agent_id")
+    )
+
+
+def start_codex_retrust(event: dict) -> None:
+    """Start the detached re-trust of this plugin's Codex hooks when Codex reinstalled it; never prints or waits."""
+    try:
+        if main_claude_session(event):
+            import codex_hook_trust
+
+            codex_hook_trust.start_retrust_if_due()
+    except Exception:
+        pass
+
+
 def prompt_settings_notice(event: dict) -> None:
     try:
-        import plugin_toggles
-
-        if (
-            plugin_toggles.detect_host() != "claude"
-            or os.environ.get(ASSIGNED_ROLE_ENV)
-            or os.environ.get("HEI5ENBUG_PARENT_SESSION")
-            or event.get("agent_id")
-        ):
+        if not main_claude_session(event):
             return
         path = session_settings_path(event)
         if path is None:
@@ -637,6 +652,7 @@ def main() -> int:
         event_name = event["hook_event_name"]
         if event_name == "UserPromptSubmit":
             prompt_settings_notice(event)
+            start_codex_retrust(event)
             return 0
         if event_name not in {"SessionStart", "SubagentStart"}:
             raise ValueError("Unsupported hook event")

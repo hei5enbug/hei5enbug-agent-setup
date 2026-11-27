@@ -77,7 +77,7 @@
 | `tests/test_hook_on_failure.py` | Claude Code에서 승인 가드의 `PreToolUse`·`PermissionRequest` 등록, DataGrip 가드, 공개 경계 검사를 실행하는 Bash 디스패처는 `onFailure`를 `block`으로 두어 실패 시 막고, 다른 훅 등록은 그렇게 하지 않는다. | `docs/guards.md` (Hook time limits and machine load) |
 | `tests/test_machine_load.py` | 부하 평균이 논리 CPU 수의 두 배 이상이거나 사용 가능한 메모리나 남은 저장 공간이 10% 미만이면, 프롬프트에 컴퓨터 부하 줄을 넘어설 때마다 한 번 더한다. | `docs/guards.md` (Hook time limits and machine load) |
 | `tests/test_hook_no_child_process.py` | 모든 도구 호출이나 프롬프트마다 도는 훅은 판단에 필요 없는 입력에서 자식 프로세스를 띄우거나 연결하지 않는다. | `docs/guards.md` (Hook time limits and machine load) |
-| `tests/test_codex_hook_trust.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. | `docs/instructions-and-delegation.md` (Automatic instructions, Situation-based delegation) |
+| `tests/test_codex_hook_trust.py`, `tests/test_session_settings_notice.py`, `skills/orca-plugin-refresh/tests/test_refresh_codex_release.py` | 플러그인은 신뢰가 풀린 자기 Codex 훅만, HEAD를 공식 원격이 지금 `main`이나 `v*` 태그로 광고하거나 `main`에 포함하는 깨끗한 공식 checkout에서만 다시 신뢰하고 `hooks/list`로 확인한다. 이 플러그인과 동반 플러그인 모두 두 부분 해시는 `trusted_hash`(훅 부분)와 `trusted_content_hash`(내용 부분)로, 한 부분 해시는 `trusted_hash`만으로 기록한다. Claude Code 프롬프트는 Codex 설치 폴더가 마지막 재신뢰 이후 바뀌었고 다른 재신뢰가 잠금을 보유하지 않을 때만 분리된 재신뢰 하나를 시작하며, 기다리거나 출력하지 않는다. 검증이 실패하면 신뢰를 기록하지 않고 실패 시각을 남기며, 재시도 지연이 지난 뒤에만 같은 폴더를 다시 시도한다. | `docs/instructions-and-delegation.md` (Automatic instructions, Situation-based delegation) |
 
 ## 승인과 데이터 가드
 

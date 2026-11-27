@@ -52,9 +52,20 @@ from Codex's install marker, with no tracked file marked skip-worktree or assume
 official repository advertises right now for `main` or a `v*` tag (`git ls-remote`), or an ancestor of that `main` tip
 fetched into a scratch repository. Local refs and tags count for nothing, and without network access it does not trust.
 `orca-plugin-refresh` does this right after a Codex install, and the role runner does it when its readiness check or
-preflight finds the guard untrusted. It records each hook's current hash through the `codex app-server` method
-`config/value/write` and confirms the result with `hooks/list`. Otherwise, including for a locally edited copy and for
-other plugins, trust the hooks again in `/hooks` after each update. The Claude Code mod is not a Codex hook, so this
+preflight finds the guard untrusted. A marketplace whose `ref` is an annotated tag name makes Codex reinstall the plugin at every start, which resets the
+trust, because the install marker's revision is the tag's peeled commit. `orca-plugin-refresh` therefore pins the `ref`
+of a Git marketplace to that commit instead of the tag name; Codex then reinstalls once and stops, so the recorded trust
+persists. A Claude Code prompt starts the same re-trust, detached, when the Codex install folder of this plugin differs
+from the folder recorded after the last re-trust (`python3 scripts/codex_hook_trust.py heal` runs it by hand). That
+check reads file metadata only, never delays the prompt, prints nothing into it, and a lock under
+`$XDG_STATE_HOME/hei5enbug-agent-setup/codex-trust/` keeps one re-trust running at a time. After a failed re-trust the
+same folder is retried at most every ten minutes. The re-trust records each hook's current hash through the
+`codex app-server` method `config/value/write`, as `trusted_hash` for the hook part and `trusted_content_hash` for the
+content part of a two-part hash as Codex's own `/hooks` stores it, and confirms the result with `hooks/list`. The
+content part also covers the install's `.git` folder, so any later rewrite of the install changes it.
+Otherwise, including for a locally edited copy and for other plugins, trust the hooks again in `/hooks` after each
+update. Setting `auto_update = false` on the marketplace entry does not stop the reinstalls on Codex 0.172.0, so the
+plugin leaves that setting alone. The Claude Code mod is not a Codex hook, so this
 trust step does not apply to it. Restart Claude Code or start a new Codex session after updating. The hook does not
 bypass host trust settings or change an already running session to a new plugin version. The `orca-plugin-refresh` skill
 uses those markers to apply an update to running Orca sessions without restarting them.

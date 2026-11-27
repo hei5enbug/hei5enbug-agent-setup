@@ -217,3 +217,91 @@ def test_수정된_설치본이나_실패한_쓰기나_다른_플러그인은_�
     with pytest.raises(trust.TrustError):
         trust.heal(hooks, command, env, str(tmp_path), 20)
     assert log.exists() == (case == "reject")
+
+
+@pytest.mark.parametrize(("current", "expected"), [
+    ("sha256:hookpart/sha256:contentpart", {"trusted_hash": "sha256:hookpart", "trusted_content_hash": "sha256:contentpart"}),
+    ("sha256:onepart", {"trusted_hash": "sha256:onepart"}),
+])
+def test_두_부분_해시는_훅_부분과_내용_부분으로_나누어_쓰고_한_부분_해시는_trusted_hash만_쓴다(installed, tmp_path, current, expected):
+    """두 부분 해시는 trusted_hash에 훅 부분, trusted_content_hash에 내용 부분을 쓰고, 한 부분 해시는 trusted_hash만 쓴다."""
+    # given
+    hooks = [{**hook(installed), "currentHash": current}]
+    command, env, log = fake_server(tmp_path, hooks)
+    # when
+    trust.heal(hooks, command, env, str(tmp_path), 20)
+    # then
+    writes = [json.loads(line) for line in log.read_text().splitlines()]
+    assert writes == [{"keyPath": f'hooks.state."{KEY}"', "value": expected, "mergeStrategy": "replace"}]
+
+
+@pytest.fixture
+def retrust_env(installed, tmp_path, monkeypatch):
+    (tmp_path / "home").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    return installed
+
+
+def test_재신뢰는_성공하면_훅을_신뢰하고_설치_폴더를_기록해_같은_폴더는_다시_하지_않는다(retrust_env, tmp_path):
+    """재신뢰가 성공하면 훅을 신뢰하고 설치 폴더를 기록해 같은 폴더에서는 다시 필요하다고 보지 않는다."""
+    # given
+    command, env, log = fake_server(tmp_path, [hook(retrust_env)])
+    # when
+    reason = trust.retrust(command=command, env=env)
+    # then
+    assert reason is None
+    assert len(log.read_text().splitlines()) == 1
+    assert trust.retrust_due(trust.install_folder(), trust.state_folder() / trust.STAMP_FILE, 0.0) is False
+
+
+def test_기록한_뒤_설치_폴더가_다시_설치되면_재신뢰가_필요하다고_본다(retrust_env):
+    """기록한 설치 폴더가 같은 버전으로 다시 설치되어 교체되면 재신뢰가 필요하다고 본다."""
+    # given
+    folder, stamp = trust.install_folder(), trust.state_folder() / trust.STAMP_FILE
+    stamp.parent.mkdir(parents=True)
+    trust.write_stamp(stamp, trust.install_identity(folder), True, 0.0)
+    unchanged = trust.retrust_due(folder, stamp, 1.0)
+    # when
+    (retrust_env.parent / "scratch").mkdir()
+    retrust_env.rename(retrust_env.parent / "old")
+    (retrust_env.parent / "scratch").rename(retrust_env)
+    # then
+    assert unchanged is False
+    assert trust.retrust_due(folder, stamp, 1.0) is True
+
+
+def test_검증에_실패한_재신뢰는_신뢰를_쓰지_않고_사유를_돌려주며_지연_안에는_같은_폴더를_다시_시도하지_않는다(retrust_env, tmp_path):
+    """수정된 설치본은 신뢰 쓰기 없이 사유를 돌려주고, 같은 폴더의 재시도는 지연 시간이 지난 뒤에만 허용한다."""
+    # given
+    (retrust_env / "hooks" / "hooks.json").write_text('{"hooks": {"PreToolUse": []}}\n')
+    command, env, log = fake_server(tmp_path, [hook(retrust_env)])
+    stamp = trust.state_folder() / trust.STAMP_FILE
+    folder = trust.install_folder()
+    # when
+    reason = trust.retrust(command=command, env=env)
+    saved = json.loads(stamp.read_text())
+    # then
+    assert reason and "local changes" in reason
+    assert not log.exists()
+    assert saved["ok"] is False
+    assert trust.retrust_due(folder, stamp, saved["at"] + 1) is False
+    assert trust.retrust_due(folder, stamp, saved["at"] + trust.RETRUST_RETRY_SECONDS) is True
+
+
+def test_다른_재신뢰가_잠금을_잡고_있으면_아무것도_하지_않는다(retrust_env, tmp_path):
+    """다른 재신뢰가 잠금을 잡고 있으면 Codex 서버를 시작하지 않고 신뢰도 쓰지 않는다."""
+    # given
+    import fcntl
+    command, env, log = fake_server(tmp_path, [hook(retrust_env)])
+    state = trust.state_folder()
+    state.mkdir(parents=True)
+    with open(state / trust.LOCK_FILE, "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # when
+        reason = trust.retrust(command=command, env=env)
+    # then
+    assert reason == "another re-trust is running"
+    assert not log.exists()
+    assert not (state / trust.STAMP_FILE).exists()

@@ -9,12 +9,17 @@ its current `main`; any network or verification failure refuses.
 
 from __future__ import annotations
 
+import argparse
+import fcntl
+import hashlib
 import json
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Sequence
 
@@ -28,6 +33,12 @@ TAGS = "refs/tags/v*"
 PROBE_REF = "refs/official/main"
 GIT_TIMEOUT_SECONDS = 20
 NETWORK_TIMEOUT_SECONDS = 120
+PLUGIN_NAME, _, MARKETPLACE = PLUGIN_ID.partition("@")
+STATE_FOLDER = "codex-trust"
+LOCK_FILE = "retrust.lock"
+STAMP_FILE = "retrust.json"
+RETRUST_RETRY_SECONDS = 600
+RETRUST_TIMEOUT_SECONDS = 60
 
 
 class TrustError(Exception):
@@ -136,10 +147,19 @@ def verify_checkout(root: Path) -> None:
         raise TrustError("the official repository advertises no main or v* tag commit that contains HEAD")
 
 
+def trust_values(current_hash: str) -> dict:
+    """The trust fields Codex stores for a hook hash: a two-part `<hook>/<content>` hash splits into `trusted_hash` and
+    `trusted_content_hash`, a one-part hash stays in `trusted_hash`."""
+    hook_part, separator, content_part = current_hash.partition("/")
+    if separator and hook_part and content_part:
+        return {"trusted_hash": hook_part, "trusted_content_hash": content_part}
+    return {"trusted_hash": current_hash}
+
+
 def trust_writes(hooks: Sequence[dict]) -> list[dict]:
     """The `config/value/write` parameters that record each hook's current hash as trusted."""
     return [
-        {"keyPath": f'hooks.state."{hook["key"]}"', "value": {"trusted_hash": hook["currentHash"]}, "mergeStrategy": "replace"}
+        {"keyPath": f'hooks.state."{hook["key"]}"', "value": trust_values(hook["currentHash"]), "mergeStrategy": "replace"}
         for hook in hooks
     ]
 
@@ -228,3 +248,139 @@ def heal(hooks: Sequence[object], command: Sequence[str], env: dict, cwd: str, t
     if not keys <= trusted:
         raise TrustError(f"Codex still lists {len(keys - trusted)} {PLUGIN_ID} hooks as untrusted")
     return after
+
+
+def state_folder() -> Path:
+    import approval_state_store
+
+    return approval_state_store.state_dir().parent / STATE_FOLDER
+
+
+def install_folder(home: Path | None = None) -> Path:
+    base = home or Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    return base / "plugins" / "cache" / MARKETPLACE / PLUGIN_NAME
+
+
+def install_identity(folder: Path) -> str | None:
+    """A digest of what Codex's install of this plugin looks like: each version folder's name, device, inode, modification
+    time, and install marker text. Codex replaces the folder on every reinstall, so any reinstall changes it. Reads only
+    file metadata and the marker; None when the folder is absent or unreadable."""
+    try:
+        records = []
+        for version in sorted(entry for entry in folder.iterdir() if entry.is_dir()):
+            info = version.stat()
+            try:
+                marker = (version / INSTALL_MARKER).read_text(encoding="utf-8")
+            except OSError:
+                marker = ""
+            records.append([version.name, info.st_dev, info.st_ino, info.st_mtime_ns, marker])
+    except OSError:
+        return None
+    return hashlib.sha256(json.dumps(records).encode("utf-8")).hexdigest() if records else None
+
+
+def read_stamp(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_stamp(path: Path, identity: str, ok: bool, at: float) -> None:
+    descriptor, temporary = tempfile.mkstemp(prefix=".retrust-", dir=path.parent)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump({"identity": identity, "ok": ok, "at": at}, stream)
+    os.replace(temporary, path)
+
+
+def retrust_due(folder: Path, stamp: Path, now: float) -> bool:
+    """Whether the install folder differs from the last re-trust's stamp; a failed attempt on the same folder is retried
+    only after the retry delay."""
+    identity = install_identity(folder)
+    if identity is None:
+        return False
+    previous = read_stamp(stamp)
+    if previous.get("identity") != identity:
+        return True
+    if previous.get("ok") is True:
+        return False
+    at = previous.get("at")
+    return not isinstance(at, (int, float)) or now - at >= RETRUST_RETRY_SECONDS
+
+
+def start_retrust_if_due(script: Path | None = None, now: float | None = None) -> bool:
+    """Start one detached re-trust when the install folder changed and none holds the lock; return at once either way.
+
+    The check reads file metadata only. The lock is taken here and handed to the child, so two prompts never start two."""
+    state = state_folder()
+    if not retrust_due(install_folder(), state / STAMP_FILE, time.time() if now is None else now):
+        return False
+    state.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(state / LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        subprocess.Popen(
+            [sys.executable, str(script or Path(__file__).resolve()), "heal", "--lock-fd", str(descriptor)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            pass_fds=(descriptor,),
+        )
+        return True
+    finally:
+        os.close(descriptor)
+
+
+def retrust(lock_fd: int | None = None, command: Sequence[str] | None = None, env: dict | None = None) -> str | None:
+    """Trust this plugin's untrusted hooks from the verified official copy Codex installed, under the re-trust lock, and
+    stamp the install folder as it is afterwards. Return None on success, otherwise why nothing was trusted."""
+    state = state_folder()
+    state.mkdir(parents=True, exist_ok=True)
+    descriptor = lock_fd
+    if descriptor is None:
+        descriptor = os.open(state / LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(descriptor)
+            return "another re-trust is running"
+    try:
+        folder = install_folder()
+        if install_identity(folder) is None:
+            return "no Codex install folder of this plugin"
+        argv = list(command) if command else ["codex", "app-server"]
+        environment = dict(os.environ) if env is None else env
+        cwd = str(Path.home())
+        try:
+            listed = listed_hooks(app_server_calls(argv, environment, cwd, [("hooks/list", {"cwds": [cwd]})],
+                                                   RETRUST_TIMEOUT_SECONDS)[0], cwd)
+            if candidates(listed):
+                heal(listed, argv, environment, cwd, RETRUST_TIMEOUT_SECONDS)
+            reason = None
+        except TrustError as error:
+            reason = str(error)
+        identity = install_identity(folder)
+        if identity is not None:
+            write_stamp(state / STAMP_FILE, identity, reason is None, time.time())
+        return reason
+    finally:
+        os.close(descriptor)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("heal", help="re-trust this plugin's Codex hooks from a verified install").add_argument(
+        "--lock-fd", type=int, help="a descriptor that already holds the re-trust lock")
+    arguments = parser.parse_args(argv)
+    reason = retrust(arguments.lock_fd)
+    if reason:
+        print(reason, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

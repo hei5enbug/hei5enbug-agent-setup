@@ -1,6 +1,8 @@
 import io
 import json
 import os
+import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -10,6 +12,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import codex_hook_trust  # noqa: E402
 import session_context  # noqa: E402
 
 NOTICE_PREFIX = (
@@ -225,3 +228,88 @@ def test_prompt_never_loads_instructions_or_starts_a_subprocess(settings_env, mo
     assert stderr == ""
     assert NOTICE_PREFIX in json.loads(stdout)["hookSpecificOutput"]["additionalContext"]
     assert forbidden.call_count == 0
+
+
+FAKE_RETRUST = "import os, time\nopen(os.environ['RETRUST_LOG'], 'a').write(str(os.getpid()) + '\\n')\ntime.sleep(30)\n"
+
+
+@pytest.fixture
+def retrust_env(settings_env, tmp_path, monkeypatch):
+    install = tmp_path / "codex" / "plugins" / "cache" / "hei5enbug" / "hei5enbug-agent-setup" / "1.0.0"
+    install.mkdir(parents=True)
+    script, log = tmp_path / "fake_heal.py", tmp_path / "retrust.log"
+    script.write_text(FAKE_RETRUST)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("RETRUST_LOG", str(log))
+    monkeypatch.setattr(codex_hook_trust, "__file__", str(script))
+    starts = []
+    real_popen = subprocess.Popen
+
+    def counting_popen(*arguments, **options):
+        starts.append((arguments[0], options))
+        return real_popen(*arguments, **options)
+
+    monkeypatch.setattr(codex_hook_trust.subprocess, "Popen", counting_popen)
+    yield install, log, starts
+    if log.exists():
+        for pid in log.read_text().split():
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+def wait_for_start(log):
+    deadline = time.time() + 10
+    while time.time() < deadline and not (log.exists() and log.read_text().strip()):
+        time.sleep(0.02)
+    return int(log.read_text().split()[0])
+
+
+@pytest.mark.parametrize("case", ["unchanged", "absent"])
+def test_설치_폴더가_그대로거나_없으면_재신뢰를_시작하지_않는다(retrust_env, tmp_path, case):
+    """설치 폴더가 마지막 성공 뒤 그대로이거나 없으면 프롬프트에서 재신뢰를 시작하지 않고 아무것도 출력하지 않는다."""
+    # given
+    install, log, starts = retrust_env
+    if case == "unchanged":
+        stamp = codex_hook_trust.state_folder() / codex_hook_trust.STAMP_FILE
+        stamp.parent.mkdir(parents=True)
+        codex_hook_trust.write_stamp(stamp, codex_hook_trust.install_identity(install.parent), True, time.time())
+    else:
+        install.rmdir()
+    # when
+    result = run_hook()
+    # then
+    assert result == (0, "", "")
+    assert starts == []
+
+
+def test_설치_폴더가_바뀌면_분리된_재신뢰를_한_번_시작하고_기다리지_않는다(retrust_env):
+    """설치 폴더가 기록과 다르면 분리된 새 세션에서 재신뢰를 시작하고, 끝나길 기다리지 않고 출력 없이 돌아온다."""
+    # given
+    install, log, starts = retrust_env
+    # when
+    result = run_hook()
+    pid = wait_for_start(log)
+    # then
+    assert result == (0, "", "")
+    assert len(starts) == 1
+    command, options = starts[0]
+    assert command[1:3] == [str(codex_hook_trust.__file__), "heal"]
+    assert options["start_new_session"] is True
+    assert (options["stdin"], options["stdout"], options["stderr"]) == (subprocess.DEVNULL,) * 3
+    os.kill(pid, 0)
+
+
+def test_재신뢰가_진행_중이면_다음_프롬프트는_또_시작하지_않는다(retrust_env):
+    """재신뢰가 잠금을 잡고 실행 중인 동안 들어온 프롬프트는 재신뢰를 한 번 더 시작하지 않는다."""
+    # given
+    install, log, starts = retrust_env
+    run_hook()
+    wait_for_start(log)
+    # when
+    result = run_hook()
+    # then
+    assert result == (0, "", "")
+    assert len(starts) == 1
